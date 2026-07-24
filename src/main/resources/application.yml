@@ -1,0 +1,45 @@
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        same-site: none
+        secure: true
+
+spring:
+  application:
+    name: ascendlab
+  datasource:
+    url: jdbc:h2:file:${APP_DATA_DIR:${user.home}/.ascendlab}/ascendlab;DB_CLOSE_DELAY=-1;AUTO_SERVER=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      max-file-size: 12MB
+      max-request-size: 24MB
+
+app:
+  public-url: ${APP_PUBLIC_URL:http://localhost:${PORT:8080}}
+  demo-mode: ${APP_DEMO_MODE:true}
+  data-dir: ${APP_DATA_DIR:${user.home}/.ascendlab}
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:AscendLabRobot}
+    webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:dev-secret}
+    register-webhook: ${TELEGRAM_REGISTER_WEBHOOK:false}
+  ai:
+    kie-api-key: ${KIE_API_KEY:}
+    kie-api-url: ${KIE_API_URL:https://api.kie.ai/gemini-2.5-flash/v1/chat/completions}
+  payments:
+    crypto-pay-token: ${CRYPTO_PAY_TOKEN:}
+    crypto-pay-base-url: ${CRYPTO_PAY_BASE_URL:https://pay.crypt.bot}
+    crypto-pay-webhook-secret: ${CRYPTO_PAY_WEBHOOK_SECRET:dev-crypto-secret}
+    yookassa-shop-id: ${YOOKASSA_SHOP_ID:}
+    yookassa-secret-key: ${YOOKASSA_SECRET_KEY:}
+    yookassa-api-url: ${YOOKASSA_API_URL:https://api.yookassa.ru/v3}
+    yookassa-webhook-secret: ${YOOKASSA_WEBHOOK_SECRET:dev-yookassa-secret}

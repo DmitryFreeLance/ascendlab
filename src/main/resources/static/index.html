@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f7fbff">
+    <title>AscendLab</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+</head>
+<body>
+<div class="ambient-grid" aria-hidden="true"></div>
+
+<header class="topbar">
+    <button class="icon-button" id="menuButton" aria-label="Открыть меню"><i data-lucide="menu"></i></button>
+    <button class="brand-pill" id="brandButton" aria-label="Профиль">
+        <span class="brand-mark">A</span>
+        <span>
+            <strong>AscendLab</strong>
+            <small>внешность · прогресс</small>
+        </span>
+    </button>
+    <button class="icon-button" id="settingsButton" aria-label="Настройки"><i data-lucide="settings-2"></i></button>
+</header>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+        <span class="brand-mark">A</span>
+        <div>
+            <strong>AscendLab</strong>
+            <small>личная лаборатория</small>
+        </div>
+        <button class="icon-button ghost" id="closeDrawer" aria-label="Закрыть меню"><i data-lucide="x"></i></button>
+    </div>
+    <nav id="drawerNav"></nav>
+</aside>
+<button class="scrim" id="scrim" aria-label="Закрыть меню"></button>
+
+<main id="app" class="app-shell" aria-live="polite"></main>
+
+<section class="modal-layer" id="paymentModal" aria-hidden="true">
+    <div class="modal-panel payment-panel" role="dialog" aria-modal="true" aria-labelledby="paymentTitle">
+        <button class="icon-button modal-close" data-close-modal aria-label="Закрыть"><i data-lucide="x"></i></button>
+        <p class="eyebrow">Способ оплаты</p>
+        <h2 id="paymentTitle">AscendPro</h2>
+        <p class="muted" id="paymentSubtitle">Доступ активируется автоматически после подтверждения.</p>
+        <div id="paymentPlanSummary"></div>
+        <div class="payment-methods">
+            <button class="method-row" data-provider="stars">
+                <span class="method-icon"><i data-lucide="star"></i></span>
+                <span><strong>Telegram Stars</strong><small>основной способ для цифрового доступа</small></span>
+                <i data-lucide="chevron-right"></i>
+            </button>
+            <button class="method-row" data-provider="crypto">
+                <span class="method-icon"><i data-lucide="badge-dollar-sign"></i></span>
+                <span><strong>Crypto Bot</strong><small>Crypto Pay · USDT / TON</small></span>
+                <i data-lucide="chevron-right"></i>
+            </button>
+            <button class="method-row" data-provider="card">
+                <span class="method-icon"><i data-lucide="credit-card"></i></span>
+                <span><strong>Карта</strong><small>YooKassa · webhook activation</small></span>
+                <i data-lucide="chevron-right"></i>
+            </button>
+        </div>
+        <p class="legal-note">
+            Карточные платежи проходят через YooKassa. Для цифровых товаров внутри Telegram отдельно проверьте правила Telegram, App Store / Google Play и настройки вашего магазина.
+        </p>
+        <button class="button secondary" id="demoActivateButton">Активировать демо-доступ</button>
+    </div>
+</section>
+
+<section class="modal-layer" id="settingsModal" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <button class="icon-button modal-close" data-close-modal aria-label="Закрыть"><i data-lucide="x"></i></button>
+        <p class="eyebrow">Настройки</p>
+        <h2 id="settingsTitle">Профиль анализа</h2>
+        <div class="field-block">
+            <label>Пол</label>
+            <div class="segmented" data-setting="gender">
+                <button data-value="male">Мужчина</button>
+                <button data-value="female">Женщина</button>
+            </div>
+        </div>
+        <div class="field-block">
+            <label for="ageInput">Возраст</label>
+            <input id="ageInput" type="number" min="14" max="80" inputmode="numeric">
+        </div>
+        <div class="field-block">
+            <label>Язык</label>
+            <div class="segmented" data-setting="languageCode">
+                <button data-value="ru">Русский</button>
+                <button data-value="en">English</button>
+            </div>
+        </div>
+        <button class="button primary" id="saveSettingsButton">Сохранить</button>
+        <button class="button quiet" data-close-modal>Отмена</button>
+    </div>
+</section>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

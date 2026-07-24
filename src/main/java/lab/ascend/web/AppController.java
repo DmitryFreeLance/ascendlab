@@ -1,0 +1,103 @@
+package lab.ascend.web;
+
+import lab.ascend.config.AppProperties;
+import lab.ascend.domain.Plan;
+import lab.ascend.domain.UserProfile;
+import lab.ascend.repo.UserRepository;
+import lab.ascend.service.CurrentUserService;
+import lab.ascend.service.PaymentService;
+import lab.ascend.service.SubscriptionService;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api")
+public class AppController {
+    private final CurrentUserService currentUser;
+    private final SubscriptionService subscriptions;
+    private final PaymentService payments;
+    private final UserRepository users;
+    private final AppProperties properties;
+
+    public AppController(CurrentUserService currentUser,
+                         SubscriptionService subscriptions,
+                         PaymentService payments,
+                         UserRepository users,
+                         AppProperties properties) {
+        this.currentUser = currentUser;
+        this.subscriptions = subscriptions;
+        this.payments = payments;
+        this.users = users;
+        this.properties = properties;
+    }
+
+    @GetMapping("/bootstrap")
+    public Map<String, Object> bootstrap(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
+        UserProfile user = currentUser.require(initData);
+        return Map.of(
+                "user", user,
+                "subscription", subscriptions.status(user.telegramId()),
+                "plans", Arrays.stream(Plan.values()).map(this::planMap).toList(),
+                "payments", payments.paymentConfig(),
+                "features", features(),
+                "botUsername", properties.telegram().botUsername()
+        );
+    }
+
+    @PatchMapping("/settings")
+    public Map<String, Object> settings(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData,
+                                        @RequestBody SettingsRequest request) {
+        UserProfile user = currentUser.require(initData);
+        int age = Math.max(14, Math.min(80, request.age()));
+        String gender = "female".equalsIgnoreCase(request.gender()) ? "female" : "male";
+        String language = "en".equalsIgnoreCase(request.languageCode()) ? "en" : "ru";
+        users.updateSettings(user.telegramId(), gender, age, language);
+        return bootstrap(initData);
+    }
+
+    private Map<String, Object> planMap(Plan plan) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("code", plan.code());
+        map.put("title", plan.title());
+        map.put("subtitle", plan.subtitle());
+        map.put("days", plan.days());
+        map.put("rub", plan.rub());
+        map.put("stars", plan.stars());
+        map.put("usd", plan.usd());
+        map.put("badge", plan.badge());
+        return map;
+    }
+
+    private List<Map<String, String>> features() {
+        return List.of(
+                feature("face", "Анализ лица", "Оценка черт и зон роста", "scan-face"),
+                feature("skin", "Skincare", "Уход за кожей", "droplets"),
+                feature("hair", "Стрижка", "Подбор формы", "scissors"),
+                feature("sleep", "Sleep Max", "Режим сна", "moon"),
+                feature("water", "Вода", "Напоминания", "waves"),
+                feature("body", "Body Max", "Тело", "dumbbell"),
+                feature("style", "Стиль", "Style Guide", "sparkles"),
+                feature("gpt", "AscendGPT", "AI-ассистент", "brain"),
+                feature("food", "Питание", "Дневник КБЖУ", "utensils"),
+                feature("academy", "Академия", "Гайды", "graduation-cap"),
+                feature("looks", "Похож на", "Looks Like", "user-search"),
+                feature("battle", "MogBattle", "Битва внешности", "swords")
+        );
+    }
+
+    private Map<String, String> feature(String id, String title, String subtitle, String icon) {
+        return Map.of("id", id, "title", title, "subtitle", subtitle, "icon", icon);
+    }
+
+    public record SettingsRequest(String gender, int age, String languageCode) {
+    }
+}
