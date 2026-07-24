@@ -43,7 +43,6 @@ public class TelegramInitDataService {
         }
         Map<String, String> fields = parseQueryString(initData);
         String receivedHash = fields.remove("hash");
-        fields.remove("signature");
         if (receivedHash == null || receivedHash.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Telegram initData hash is missing");
         }
