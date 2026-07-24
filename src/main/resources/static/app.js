@@ -92,6 +92,8 @@ function initTelegram() {
     tg.setHeaderColor("#f7fbff");
     tg.setBackgroundColor("#f7fbff");
     tg.setBottomBarColor("#f7fbff");
+    try { tg.BackButton?.hide?.(); } catch (_) {}
+    try { tg.SettingsButton?.hide?.(); } catch (_) {}
     if (tg.isVersionAtLeast?.("8.0")) {
         try { tg.requestFullscreen(); } catch (_) {}
     }
@@ -123,9 +125,11 @@ async function bootstrap() {
         };
         state.selectedPlan = state.boot.plans.find(plan => plan.code === "quarter")?.code || state.boot.plans[0].code;
         renderNav();
-        const seen = localStorage.getItem("ascendlab:onboarding");
+        const seen = Boolean(state.boot.onboardingSeen || localStorage.getItem("ascendlab:onboarding"));
         if (!seen) {
             state.view = "onboarding";
+        } else if (!state.boot.onboardingSeen) {
+            completeOnboardingRemote();
         }
         render();
     } catch (error) {
@@ -139,6 +143,7 @@ function renderLoading() {
 
 function render() {
     const app = document.querySelector("#app");
+    document.body.classList.toggle("is-onboarding", state.view === "onboarding");
     const view = {
         onboarding: renderOnboarding,
         dashboard: renderDashboard,
@@ -373,21 +378,68 @@ function renderAdmin() {
         return `<section class="section-panel"><p class="eyebrow">Админка</p><h1>Загрузка</h1><div class="skeleton"></div></section>`;
     }
     const stats = admin.stats || {};
-    return `<section class="section-panel">
-        <p class="eyebrow">Админка</p>
-        <h1>Панель управления</h1>
-        <div class="grid three">
-            ${adminStat("Пользователи", stats.users || 0)}
-            ${adminStat("Активные", stats.activeSubscriptions || 0)}
-            ${adminStat("Платежи", stats.paidPayments || 0)}
-            ${adminStat("Выручка RUB", stats.rubRevenue || 0)}
-            ${adminStat("Анализы", stats.analyses || 0)}
-            ${adminStat("Питание", stats.meals || 0)}
+    const conversion = pct(stats.paidPayments || 0, Math.max(1, stats.users || 1));
+    return `<section class="section-panel admin-hero">
+        <div>
+            <p class="eyebrow">Admin Control</p>
+            <h1>Пульт роста</h1>
+            <p class="muted">Деньги, пользователи, тарифы и состояние интеграций в одном месте.</p>
+            <div class="admin-actions">
+                <button class="button primary" data-action="refresh-admin"><i data-lucide="rotate-cw"></i>Обновить</button>
+                <button class="button secondary" data-action="copy-admin-snapshot"><i data-lucide="copy"></i>Сводка</button>
+            </div>
+        </div>
+        <div class="admin-system-card">
+            <span class="admin-live-dot"></span>
+            <h3>Система</h3>
+            <div class="admin-status-grid">
+                ${adminStatus("Bot", admin.system?.botConfigured, admin.system?.longPolling ? "long polling" : "webhook")}
+                ${adminStatus("AI", admin.system?.aiConfigured, "Kie Gemini")}
+                ${adminStatus("Card", admin.system?.cardConfigured, "YooKassa")}
+                ${adminStatus("Crypto", admin.system?.cryptoConfigured, "CryptoBot")}
+            </div>
         </div>
     </section>
-    <section class="section-panel">
+    <section class="section-panel admin-kpi-panel">
+        <p class="eyebrow">Пульс проекта</p>
+        <div class="admin-kpi-grid">
+            ${adminKpi("Пользователи", stats.users || 0, `+${stats.newUsers7d || 0} за 7 дней`, "users")}
+            ${adminKpi("Активные Pro", stats.activeSubscriptions || 0, `${conversion}% paid/user`, "sparkles")}
+            ${adminKpi("Выручка", `${formatCompact(stats.rubRevenue || 0)} ₽`, `${formatCompact(stats.starsRevenue || 0)} Stars · ${formatCompact(stats.usdRevenue || 0)} USDT`, "wallet")}
+            ${adminKpi("AI-активность", stats.analyses || 0, `avg score ${stats.avgScore || 0} · meals ${stats.meals || 0}`, "activity")}
+        </div>
+    </section>
+    <section class="section-panel admin-insights">
+        <div class="admin-panel-head">
+            <div>
+                <p class="eyebrow">Монетизация</p>
+                <h2>Провайдеры</h2>
+            </div>
+            <span class="badge">${stats.paidPayments7d || 0} оплат за 7 дней</span>
+        </div>
+        <div class="admin-provider-list">${(admin.providerStats || []).length ? admin.providerStats.map(adminProviderRow).join("") : emptyAdmin("Платежей пока нет")}</div>
+    </section>
+    <section class="section-panel admin-insights">
+        <div class="admin-panel-head">
+            <div>
+                <p class="eyebrow">Воронка</p>
+                <h2>Тарифы и статусы</h2>
+            </div>
+        </div>
+        <div class="admin-split-grid">
+            <div class="admin-mini-board">
+                <h3>Тарифы</h3>
+                ${(admin.planStats || []).length ? admin.planStats.map(adminPlanPulse).join("") : emptyAdmin("Тарифы еще не покупали")}
+            </div>
+            <div class="admin-mini-board">
+                <h3>Статусы оплат</h3>
+                ${(admin.paymentStatusStats || []).length ? admin.paymentStatusStats.map(adminStatusPulse).join("") : emptyAdmin("Событий оплат пока нет")}
+            </div>
+        </div>
+    </section>
+    <section class="section-panel admin-tariffs">
         <p class="eyebrow">Тарифы</p>
-        <h2>Цены</h2>
+        <h2>Редактор цен</h2>
         <div class="admin-plan-list">${(admin.plans || state.boot.plans).map(adminPlanEditor).join("")}</div>
     </section>
     <section class="section-panel">
@@ -400,25 +452,91 @@ function renderAdmin() {
         </div>
         <div class="zone-list">${(admin.admins || []).map(item => `<div class="zone-card"><strong>${item.telegramId}<em>${escapeHtml(item.note || "")}</em></strong><p class="muted">${formatDate(item.createdAt)}</p></div>`).join("")}</div>
     </section>
-    <section class="section-panel">
-        <p class="eyebrow">Последние платежи</p>
-        <div class="zone-list">${(admin.recentPayments || []).map(item => `<div class="zone-card"><strong>${escapeHtml(item.provider)} · ${escapeHtml(item.planCode)}<em>${escapeHtml(item.status)}</em></strong><p class="muted">${item.telegramId} · ${escapeHtml(item.amount)} ${escapeHtml(item.currency)} · ${formatDate(item.createdAt)}</p></div>`).join("")}</div>
-    </section>
-    <section class="section-panel">
-        <p class="eyebrow">Новые пользователи</p>
-        <div class="zone-list">${(admin.recentUsers || []).map(item => `<div class="zone-card"><strong>${escapeHtml(item.firstName || "Пользователь")}<em>${item.telegramId}</em></strong><p class="muted">${item.username ? "@" + escapeHtml(item.username) + " · " : ""}${formatDate(item.createdAt)}</p></div>`).join("")}</div>
+    <section class="section-panel admin-live-feed">
+        <div class="admin-panel-head">
+            <div>
+                <p class="eyebrow">Live feed</p>
+                <h2>Последние события</h2>
+            </div>
+        </div>
+        <div class="admin-feed-grid">
+            <div>
+                <h3>Платежи</h3>
+                <div class="zone-list">${(admin.recentPayments || []).map(adminPaymentItem).join("") || emptyAdmin("Платежей пока нет")}</div>
+            </div>
+            <div>
+                <h3>Пользователи</h3>
+                <div class="zone-list">${(admin.recentUsers || []).map(adminUserItem).join("") || emptyAdmin("Пользователей пока нет")}</div>
+            </div>
+            <div>
+                <h3>Анализы</h3>
+                <div class="zone-list">${(admin.recentAnalyses || []).map(adminAnalysisItem).join("") || emptyAdmin("Анализов пока нет")}</div>
+            </div>
+        </div>
     </section>`;
 }
 
-function adminStat(label, value) {
-    return `<div class="battle-stat"><small>${escapeHtml(label)}</small><strong>${escapeHtml(String(value))}</strong></div>`;
+function adminKpi(label, value, hint, icon) {
+    return `<div class="admin-kpi-card">
+        <span class="icon-shell"><i data-lucide="${icon}"></i></span>
+        <small>${escapeHtml(label)}</small>
+        <strong>${escapeHtml(String(value))}</strong>
+        <em>${escapeHtml(hint)}</em>
+    </div>`;
+}
+
+function adminStatus(label, active, detail) {
+    return `<div class="admin-status ${active ? "online" : "offline"}">
+        <span></span>
+        <strong>${escapeHtml(label)}</strong>
+        <small>${escapeHtml(detail || (active ? "online" : "offline"))}</small>
+    </div>`;
+}
+
+function adminProviderRow(item) {
+    const total = Number(item.total || 0);
+    const paid = Number(item.paid || 0);
+    const percent = pct(paid, Math.max(1, total));
+    return `<div class="admin-provider-row">
+        <div>
+            <strong>${escapeHtml(item.provider)}</strong>
+            <small>${paid}/${total} оплачено · ${percent}%</small>
+        </div>
+        <div class="admin-provider-money">${formatCompact(item.rubRevenue || 0)} ₽<span>${formatCompact(item.starsRevenue || 0)} Stars · ${formatCompact(item.usdRevenue || 0)} USDT</span></div>
+        <div class="track"><span class="fill" style="width:${percent}%"></span></div>
+    </div>`;
+}
+
+function adminPlanPulse(item) {
+    const plan = state.boot.plans.find(plan => plan.code === item.planCode);
+    const title = plan?.title || item.planCode;
+    const percent = pct(item.paid || 0, Math.max(1, item.total || 1));
+    return `<div class="admin-pulse-row">
+        <span>${escapeHtml(title)}</span>
+        <strong>${item.paid}/${item.total}</strong>
+        <div class="track"><span class="fill" style="width:${percent}%"></span></div>
+    </div>`;
+}
+
+function adminStatusPulse(item) {
+    const totalPayments = Math.max(1, Number(state.admin?.stats?.payments || 1));
+    const percent = pct(item.total || 0, totalPayments);
+    return `<div class="admin-pulse-row">
+        <span>${escapeHtml(item.status)}</span>
+        <strong>${item.total}</strong>
+        <div class="track"><span class="fill" style="width:${percent}%"></span></div>
+    </div>`;
 }
 
 function adminPlanEditor(plan) {
     return `<div class="admin-plan" data-admin-plan="${plan.code}">
-        <div>
+        <div class="admin-plan-head">
+            <span class="icon-shell"><i data-lucide="badge-dollar-sign"></i></span>
+            <div>
             <h3>${escapeHtml(plan.title)}</h3>
             <p class="muted">${escapeHtml(plan.subtitle)}</p>
+            </div>
+            ${plan.badge ? `<span class="badge">${escapeHtml(plan.badge)}</span>` : ""}
         </div>
         <div class="admin-price-grid">
             <label>₽<input inputmode="numeric" data-field="rub" value="${plan.rub}"></label>
@@ -428,6 +546,22 @@ function adminPlanEditor(plan) {
         </div>
         <button class="button secondary" data-action="save-plan" data-plan-code="${plan.code}"><i data-lucide="save"></i>Сохранить тариф</button>
     </div>`;
+}
+
+function adminPaymentItem(item) {
+    return `<div class="zone-card admin-feed-item"><strong>${escapeHtml(item.provider)} · ${escapeHtml(item.planCode)}<em>${escapeHtml(item.status)}</em></strong><p class="muted">${item.telegramId} · ${escapeHtml(item.amount)} ${escapeHtml(item.currency)} · ${formatDate(item.createdAt)}</p></div>`;
+}
+
+function adminUserItem(item) {
+    return `<div class="zone-card admin-feed-item"><strong>${escapeHtml(item.firstName || "Пользователь")}<em>${item.telegramId}</em></strong><p class="muted">${item.username ? "@" + escapeHtml(item.username) + " · " : ""}${formatDate(item.createdAt)}</p></div>`;
+}
+
+function adminAnalysisItem(item) {
+    return `<div class="zone-card admin-feed-item"><strong>${escapeHtml(item.firstName || item.username || "Анализ")}<em>${item.score}/100</em></strong><p class="muted">${item.telegramId} · ${formatDate(item.createdAt)}</p></div>`;
+}
+
+function emptyAdmin(text) {
+    return `<div class="admin-empty">${escapeHtml(text)}</div>`;
 }
 
 function metric(name, value, hint = "") {
@@ -531,10 +665,19 @@ async function handleAction(event) {
     if (action === "save-plan") {
         await saveAdminPlan(event.currentTarget.dataset.planCode);
     }
+    if (action === "refresh-admin") {
+        await loadAdmin();
+        toast("Админка обновлена.");
+    }
+    if (action === "copy-admin-snapshot") {
+        await copyAdminSnapshot();
+    }
 }
 
 function finishOnboarding() {
     localStorage.setItem("ascendlab:onboarding", "1");
+    if (state.boot) state.boot.onboardingSeen = true;
+    completeOnboardingRemote();
     setView("dashboard");
     resetScroll();
 }
@@ -550,6 +693,18 @@ function setView(view) {
 
 function resetScroll() {
     requestAnimationFrame(() => window.scrollTo(0, 0));
+}
+
+async function completeOnboardingRemote() {
+    try {
+        await api("/api/onboarding/complete", {
+            method: "POST",
+            body: JSON.stringify({})
+        });
+        if (state.boot) state.boot.onboardingSeen = true;
+    } catch (_) {
+        // LocalStorage still prevents repeated onboarding on this device.
+    }
 }
 
 function renderNav() {
@@ -716,6 +871,27 @@ async function saveAdminPlan(code) {
         toast("Тариф обновлён.");
     } catch (error) {
         toast(error.message);
+    }
+}
+
+async function copyAdminSnapshot() {
+    const stats = state.admin?.stats || {};
+    const text = [
+        "AscendLab admin snapshot",
+        `Users: ${stats.users || 0}`,
+        `Active Pro: ${stats.activeSubscriptions || 0}`,
+        `Paid payments: ${stats.paidPayments || 0}`,
+        `Revenue RUB: ${stats.rubRevenue || 0}`,
+        `Revenue Stars: ${stats.starsRevenue || 0}`,
+        `Revenue USDT: ${stats.usdRevenue || 0}`,
+        `Analyses: ${stats.analyses || 0}`,
+        `Meals: ${stats.meals || 0}`
+    ].join("\n");
+    try {
+        await navigator.clipboard.writeText(text);
+        toast("Сводка скопирована.");
+    } catch (_) {
+        toast("Не удалось скопировать.");
     }
 }
 
@@ -892,6 +1068,15 @@ function formatDate(value) {
     } catch (_) {
         return value;
     }
+}
+
+function formatCompact(value) {
+    const number = Number(value || 0);
+    if (!Number.isFinite(number)) return "0";
+    return new Intl.NumberFormat("ru-RU", {
+        maximumFractionDigits: number >= 100 ? 0 : 2,
+        notation: number >= 10000 ? "compact" : "standard"
+    }).format(number);
 }
 
 initTelegram();

@@ -66,6 +66,25 @@ public class UserRepository {
                 gender, age, languageCode, telegramId);
     }
 
+    public boolean onboardingSeen(long telegramId) {
+        Boolean seen = jdbc.queryForObject("""
+                        SELECT onboarded_at IS NOT NULL FROM users WHERE telegram_id = ?
+                        """,
+                Boolean.class,
+                telegramId);
+        return Boolean.TRUE.equals(seen);
+    }
+
+    public void markOnboardingSeen(long telegramId) {
+        jdbc.update("""
+                        UPDATE users
+                        SET onboarded_at = COALESCE(onboarded_at, CURRENT_TIMESTAMP),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE telegram_id = ?
+                        """,
+                telegramId);
+    }
+
     private static String valueOr(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }

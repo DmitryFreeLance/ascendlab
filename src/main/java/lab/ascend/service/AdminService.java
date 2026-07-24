@@ -50,10 +50,27 @@ public class AdminService implements ApplicationRunner {
         requireAdmin(actorTelegramId);
         return Map.of(
                 "stats", admins.stats(),
+                "system", systemStatus(),
                 "plans", plans.all(),
                 "admins", admins.admins(),
+                "providerStats", admins.providerStats(),
+                "planStats", admins.planStats(),
+                "paymentStatusStats", admins.paymentStatusStats(),
+                "recentAnalyses", admins.recentAnalyses(),
                 "recentPayments", admins.recentPayments(),
                 "recentUsers", admins.recentUsers()
+        );
+    }
+
+    private Map<String, Object> systemStatus() {
+        return Map.of(
+                "publicUrl", properties.miniAppUrl(),
+                "demoMode", properties.demoMode(),
+                "longPolling", properties.telegram().longPolling(),
+                "botConfigured", properties.telegram().configured(),
+                "aiConfigured", properties.ai().configured(),
+                "cryptoConfigured", properties.payments().cryptoConfigured(),
+                "cardConfigured", properties.payments().cardConfigured()
         );
     }
 

@@ -7,9 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
     photo_url VARCHAR(1024),
     gender VARCHAR(32) DEFAULT 'male',
     age INT DEFAULT 25,
+    onboarded_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     telegram_id BIGINT PRIMARY KEY,

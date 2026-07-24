@@ -10,6 +10,7 @@ import lab.ascend.service.PlanCatalogService;
 import lab.ascend.service.SubscriptionService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +51,7 @@ public class AppController {
         UserProfile user = currentUser.require(initData);
         return Map.of(
                 "user", user,
+                "onboardingSeen", users.onboardingSeen(user.telegramId()),
                 "isAdmin", admins.isAdmin(user.telegramId()),
                 "subscription", subscriptions.status(user.telegramId()),
                 "plans", plans.all(),
@@ -68,6 +70,13 @@ public class AppController {
         String language = "en".equalsIgnoreCase(request.languageCode()) ? "en" : "ru";
         users.updateSettings(user.telegramId(), gender, age, language);
         return bootstrap(initData);
+    }
+
+    @PostMapping("/onboarding/complete")
+    public Map<String, Object> completeOnboarding(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
+        UserProfile user = currentUser.require(initData);
+        users.markOnboardingSeen(user.telegramId());
+        return Map.of("ok", true);
     }
 
     private List<Map<String, String>> features() {

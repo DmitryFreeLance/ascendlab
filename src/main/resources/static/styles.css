@@ -17,6 +17,7 @@
     --shadow-soft: 0 12px 36px rgba(42, 67, 94, 0.10);
     --radius: 8px;
     --safe-top: var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --content-safe-top: var(--tg-content-safe-area-inset-top, 0px);
     --safe-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -74,6 +75,14 @@ button {
     background: rgba(247, 251, 255, 0.74);
     backdrop-filter: blur(24px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+body.is-onboarding .topbar {
+    display: none;
+}
+
+body.is-onboarding .app-shell {
+    padding-top: calc(14px + var(--safe-top) + var(--content-safe-top));
 }
 
 .icon-button {
@@ -496,7 +505,7 @@ h3 {
     color: var(--ink);
 }
 
-.feature-card .icon-shell,
+.icon-shell,
 .method-icon,
 .upload-icon {
     width: 46px;
@@ -1000,10 +1009,212 @@ h3 {
     font-size: 28px;
 }
 
+.admin-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(260px, 0.88fr);
+    align-items: stretch;
+    gap: 18px;
+}
+
+.admin-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.admin-system-card {
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+    padding: 18px;
+    border: 1px solid rgba(40, 121, 184, 0.16);
+    border-radius: var(--radius);
+    background:
+        radial-gradient(circle at 82% 18%, rgba(100, 224, 176, 0.26), transparent 34%),
+        radial-gradient(circle at 16% 80%, rgba(247, 205, 78, 0.28), transparent 34%),
+        rgba(255, 255, 255, 0.64);
+    box-shadow: var(--shadow-soft);
+}
+
+.admin-system-card h3 {
+    margin-top: 34px;
+}
+
+.admin-live-dot {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--mint);
+    box-shadow: 0 0 0 8px rgba(100, 224, 176, 0.16), 0 0 32px rgba(100, 224, 176, 0.72);
+}
+
+.admin-status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.admin-status {
+    min-height: 70px;
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr);
+    gap: 4px 9px;
+    align-content: center;
+    padding: 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.58);
+}
+
+.admin-status span {
+    grid-row: 1 / span 2;
+    align-self: center;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--coral);
+}
+
+.admin-status.online span {
+    background: var(--mint);
+}
+
+.admin-status strong {
+    line-height: 1;
+}
+
+.admin-status small {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.admin-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-kpi-card {
+    min-height: 168px;
+    display: grid;
+    align-content: space-between;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.80), rgba(235, 249, 255, 0.56)),
+        rgba(255, 255, 255, 0.68);
+    box-shadow: var(--shadow-soft);
+}
+
+.admin-kpi-card small,
+.admin-kpi-card em,
+.admin-provider-row small,
+.admin-provider-money span {
+    color: var(--muted);
+}
+
+.admin-kpi-card small {
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.admin-kpi-card strong {
+    font-size: 30px;
+    line-height: 1;
+}
+
+.admin-kpi-card em {
+    font-style: normal;
+    line-height: 1.35;
+}
+
+.admin-panel-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.admin-provider-list,
 .admin-plan-list,
 .admin-form {
     display: grid;
     gap: 12px;
+}
+
+.admin-provider-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 14px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.62);
+    box-shadow: var(--shadow-soft);
+}
+
+.admin-provider-row .track {
+    grid-column: 1 / -1;
+}
+
+.admin-provider-money {
+    text-align: right;
+    font-weight: 950;
+}
+
+.admin-provider-money span {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 760;
+}
+
+.admin-split-grid,
+.admin-feed-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-feed-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-mini-board {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.56);
+}
+
+.admin-pulse-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    align-items: center;
+}
+
+.admin-pulse-row span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-pulse-row .track {
+    grid-column: 1 / -1;
 }
 
 .admin-plan {
@@ -1014,6 +1225,18 @@ h3 {
     border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.62);
     box-shadow: var(--shadow-soft);
+}
+
+.admin-plan-head {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.admin-plan-head h3,
+.admin-plan-head p {
+    margin-bottom: 0;
 }
 
 .admin-price-grid {
@@ -1041,6 +1264,21 @@ h3 {
     color: var(--ink);
     padding: 0 10px;
     outline: none;
+}
+
+.admin-feed-item {
+    box-shadow: none;
+}
+
+.admin-empty {
+    min-height: 86px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.38);
+    text-align: center;
 }
 
 .modal-layer {
@@ -1326,6 +1564,28 @@ h3 {
         grid-template-columns: 1fr;
     }
 
+    .admin-hero,
+    .admin-split-grid,
+    .admin-feed-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-provider-row {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-provider-money {
+        text-align: left;
+    }
+
+    .admin-panel-head {
+        display: grid;
+    }
+
     .admin-price-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1364,5 +1624,21 @@ h3 {
         right: 8px;
         bottom: calc(18px + var(--safe-bottom));
         padding: 8px;
+    }
+
+    .admin-actions,
+    .admin-status-grid,
+    .admin-kpi-grid,
+    .admin-price-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-plan-head {
+        grid-template-columns: 46px minmax(0, 1fr);
+    }
+
+    .admin-plan-head .badge {
+        grid-column: 1 / -1;
+        justify-self: start;
     }
 }
