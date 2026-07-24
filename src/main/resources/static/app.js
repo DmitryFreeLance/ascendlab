@@ -1,4 +1,13 @@
 const tg = window.Telegram?.WebApp;
+const APP_BASE_PATH = (() => {
+    const path = window.location.pathname;
+    if (!path || path === "/") return "";
+    return path.endsWith("/") ? path.slice(0, -1) : path;
+})();
+
+function apiPath(path) {
+    return `${APP_BASE_PATH}${path}`;
+}
 
 const state = {
     view: "dashboard",
@@ -91,7 +100,7 @@ async function api(path, options = {}) {
         "X-Telegram-Init-Data": tg?.initData || "",
         ...(options.headers || {})
     };
-    const response = await fetch(path, { ...options, headers });
+    const response = await fetch(apiPath(path), { ...options, headers });
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};
     if (!response.ok) {
@@ -476,7 +485,7 @@ async function runAnalysis() {
     }
     try {
         toast("Сканирую фото...");
-        const response = await fetch("/api/analysis", {
+        const response = await fetch(apiPath("/api/analysis"), {
             method: "POST",
             headers: { "X-Telegram-Init-Data": tg?.initData || "" },
             body: form
@@ -499,7 +508,7 @@ async function sendChat(text) {
     state.chat.push(assistant);
     render();
     try {
-        const response = await fetch("/api/chat/stream", {
+        const response = await fetch(apiPath("/api/chat/stream"), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

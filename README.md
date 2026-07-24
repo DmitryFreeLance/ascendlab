@@ -41,9 +41,11 @@ Copy `.env.example` to `.env` and fill what you need.
 Required for production:
 
 - `APP_PUBLIC_URL`: public HTTPS URL of the service
+- `APP_CONTEXT_PATH`: optional path prefix such as `/ascendlab` when the Mini App shares an existing domain
 - `TELEGRAM_BOT_TOKEN`: token from `@BotFather`
 - `TELEGRAM_BOT_USERNAME`: bot username without `@`
 - `TELEGRAM_WEBHOOK_SECRET`: long random string
+- `TELEGRAM_LONG_POLLING`: set `true` when the bot should read Telegram updates through `getUpdates`
 - `APP_DEMO_MODE=false`
 
 AI:
@@ -81,11 +83,21 @@ https://your-domain.example/api/payments/yookassa/webhook/<YOOKASSA_WEBHOOK_SECR
 https://your-domain.example/api/telegram/webhook/<TELEGRAM_WEBHOOK_SECRET>
 ```
 
-With env:
+Webhook mode:
 
 ```text
 TELEGRAM_REGISTER_WEBHOOK=true
+TELEGRAM_LONG_POLLING=false
 ```
+
+Long polling mode:
+
+```text
+TELEGRAM_REGISTER_WEBHOOK=false
+TELEGRAM_LONG_POLLING=true
+```
+
+In long polling mode the app calls `deleteWebhook` on startup and then receives `message` and `pre_checkout_query` updates through `getUpdates`. Run only one container per bot token in this mode.
 
 ## Telegram Stars
 

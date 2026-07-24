@@ -38,7 +38,8 @@ public record AppProperties(
             String botToken,
             String botUsername,
             String webhookSecret,
-            boolean registerWebhook
+            boolean registerWebhook,
+            boolean longPolling
     ) {
         public boolean configured() {
             return botToken != null && !botToken.isBlank();

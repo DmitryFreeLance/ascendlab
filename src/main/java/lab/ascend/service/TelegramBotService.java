@@ -26,6 +26,9 @@ public class TelegramBotService implements ApplicationRunner {
     private final PaymentRepository payments;
     private final SubscriptionService subscriptions;
     private final RestClient restClient;
+    private volatile boolean polling;
+    private volatile long lastUpdateId;
+    private Thread pollingThread;
 
     public TelegramBotService(AppProperties properties,
                               ObjectMapper objectMapper,
@@ -45,7 +48,10 @@ public class TelegramBotService implements ApplicationRunner {
             return;
         }
         setChatMenuButton();
-        if (properties.telegram().registerWebhook()) {
+        if (properties.telegram().longPolling()) {
+            deleteWebhook();
+            startLongPolling();
+        } else if (properties.telegram().registerWebhook()) {
             setWebhook();
         }
     }
@@ -159,6 +165,67 @@ public class TelegramBotService implements ApplicationRunner {
             ));
         } catch (Exception ex) {
             log.warn("Unable to register Telegram webhook: {}", ex.getMessage());
+        }
+    }
+
+    private void deleteWebhook() {
+        try {
+            call("deleteWebhook", Map.of("drop_pending_updates", false));
+            log.info("Telegram webhook deleted; long polling can receive updates.");
+        } catch (Exception ex) {
+            log.warn("Unable to delete Telegram webhook before long polling: {}", ex.getMessage());
+        }
+    }
+
+    private void startLongPolling() {
+        if (pollingThread != null && pollingThread.isAlive()) {
+            return;
+        }
+        polling = true;
+        pollingThread = new Thread(this::pollLoop, "telegram-long-polling");
+        pollingThread.setDaemon(true);
+        pollingThread.start();
+        log.info("Telegram long polling started.");
+    }
+
+    private void pollLoop() {
+        while (polling && !Thread.currentThread().isInterrupted()) {
+            try {
+                JsonNode response = call("getUpdates", Map.of(
+                        "offset", lastUpdateId + 1,
+                        "timeout", 50,
+                        "allowed_updates", List.of("message", "pre_checkout_query")
+                ));
+                for (JsonNode update : response.path("result")) {
+                    lastUpdateId = Math.max(lastUpdateId, update.path("update_id").asLong());
+                    try {
+                        handleUpdate(update);
+                    } catch (Exception ex) {
+                        log.warn("Unable to handle Telegram update {}: {}", update.path("update_id").asLong(), ex.getMessage());
+                    }
+                }
+            } catch (Exception ex) {
+                if (polling) {
+                    log.warn("Telegram long polling failed: {}", ex.getMessage());
+                    sleepAfterPollingError();
+                }
+            }
+        }
+    }
+
+    private void sleepAfterPollingError() {
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @jakarta.annotation.PreDestroy
+    public void stopLongPolling() {
+        polling = false;
+        if (pollingThread != null) {
+            pollingThread.interrupt();
         }
     }
 
