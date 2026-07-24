@@ -3,7 +3,7 @@ package lab.ascend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lab.ascend.config.AppProperties;
-import lab.ascend.domain.Plan;
+import lab.ascend.domain.PlanOffer;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -28,7 +28,7 @@ public class CryptoPayClient {
         this.restClient = RestClient.create();
     }
 
-    public CryptoInvoice createInvoice(long telegramId, Plan plan, String paymentId) {
+    public CryptoInvoice createInvoice(long telegramId, PlanOffer plan, String paymentId) {
         if (!properties.payments().cryptoConfigured()) {
             throw new IllegalStateException("Crypto Pay token is not configured");
         }

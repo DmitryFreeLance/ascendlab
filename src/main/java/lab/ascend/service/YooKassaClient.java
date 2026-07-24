@@ -3,7 +3,7 @@ package lab.ascend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lab.ascend.config.AppProperties;
-import lab.ascend.domain.Plan;
+import lab.ascend.domain.PlanOffer;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -23,7 +23,7 @@ public class YooKassaClient {
         this.restClient = RestClient.create();
     }
 
-    public YooKassaPayment createPayment(long telegramId, Plan plan, String paymentId) {
+    public YooKassaPayment createPayment(long telegramId, PlanOffer plan, String paymentId) {
         if (!properties.payments().yookassaConfigured()) {
             throw new IllegalStateException("YooKassa credentials are not configured");
         }

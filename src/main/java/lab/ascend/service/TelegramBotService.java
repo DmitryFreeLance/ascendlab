@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lab.ascend.config.AppProperties;
 import lab.ascend.domain.PaymentStatus;
-import lab.ascend.domain.Plan;
+import lab.ascend.domain.PlanOffer;
 import lab.ascend.repo.PaymentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +25,7 @@ public class TelegramBotService implements ApplicationRunner {
     private final ObjectMapper objectMapper;
     private final PaymentRepository payments;
     private final SubscriptionService subscriptions;
+    private final PlanCatalogService plans;
     private final RestClient restClient;
     private volatile boolean polling;
     private volatile long lastUpdateId;
@@ -33,11 +34,13 @@ public class TelegramBotService implements ApplicationRunner {
     public TelegramBotService(AppProperties properties,
                               ObjectMapper objectMapper,
                               PaymentRepository payments,
-                              SubscriptionService subscriptions) {
+                              SubscriptionService subscriptions,
+                              PlanCatalogService plans) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.payments = payments;
         this.subscriptions = subscriptions;
+        this.plans = plans;
         this.restClient = RestClient.create();
     }
 
@@ -56,7 +59,7 @@ public class TelegramBotService implements ApplicationRunner {
         }
     }
 
-    public String createStarsInvoiceLink(long telegramId, Plan plan, String paymentId) {
+    public String createStarsInvoiceLink(long telegramId, PlanOffer plan, String paymentId) {
         Map<String, Object> body = Map.of(
                 "title", "AscendLab - " + plan.title(),
                 "description", "Доступ к AscendPro: анализ лица, AscendGPT, питание, академия и MogBattle.",
@@ -102,7 +105,7 @@ public class TelegramBotService implements ApplicationRunner {
         }
         String paymentId = parts[0];
         long telegramId = Long.parseLong(parts[1]);
-        Plan plan = Plan.byCode(parts[2]);
+        PlanOffer plan = plans.get(parts[2]);
         payments.markStatus(paymentId, PaymentStatus.PAID, payment.path("telegram_payment_charge_id").asText(null), payment.toString());
         subscriptions.activate(telegramId, plan, "telegram_stars", paymentId);
         sendMessage(message.path("chat").path("id").asLong(),

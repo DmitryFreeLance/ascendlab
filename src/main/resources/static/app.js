@@ -17,6 +17,7 @@ const state = {
     files: { front: null, side: null },
     analysis: null,
     nutrition: null,
+    admin: null,
     mealType: "dinner",
     chat: [],
     settings: { gender: "male", age: 25, languageCode: "ru" }
@@ -32,6 +33,8 @@ const nav = [
     ["nutrition", "Питание", "utensils"],
     ["academy", "Академия", "graduation-cap"]
 ];
+
+const adminNavItem = ["admin", "Админка", "shield-check"];
 
 const onboarding = [
     {
@@ -145,7 +148,8 @@ function render() {
         gpt: renderGpt,
         nutrition: renderNutrition,
         academy: renderAcademy,
-        battle: renderBattle
+        battle: renderBattle,
+        admin: renderAdmin
     }[state.view] || renderDashboard;
     app.innerHTML = `<div class="view">${view()}</div>`;
     bindView();
@@ -360,6 +364,72 @@ function renderBattle() {
     </section>`;
 }
 
+function renderAdmin() {
+    if (!state.boot?.isAdmin) {
+        return `<section class="section-panel"><p class="eyebrow">Доступ закрыт</p><h1>Админка</h1><p class="muted">Этот раздел видят только администраторы.</p></section>`;
+    }
+    const admin = state.admin;
+    if (!admin) {
+        return `<section class="section-panel"><p class="eyebrow">Админка</p><h1>Загрузка</h1><div class="skeleton"></div></section>`;
+    }
+    const stats = admin.stats || {};
+    return `<section class="section-panel">
+        <p class="eyebrow">Админка</p>
+        <h1>Панель управления</h1>
+        <div class="grid three">
+            ${adminStat("Пользователи", stats.users || 0)}
+            ${adminStat("Активные", stats.activeSubscriptions || 0)}
+            ${adminStat("Платежи", stats.paidPayments || 0)}
+            ${adminStat("Выручка RUB", stats.rubRevenue || 0)}
+            ${adminStat("Анализы", stats.analyses || 0)}
+            ${adminStat("Питание", stats.meals || 0)}
+        </div>
+    </section>
+    <section class="section-panel">
+        <p class="eyebrow">Тарифы</p>
+        <h2>Цены</h2>
+        <div class="admin-plan-list">${(admin.plans || state.boot.plans).map(adminPlanEditor).join("")}</div>
+    </section>
+    <section class="section-panel">
+        <p class="eyebrow">Админы</p>
+        <h2>Добавить администратора</h2>
+        <div class="admin-form">
+            <input class="meal-input" id="adminTelegramId" inputmode="numeric" placeholder="Telegram ID">
+            <input class="meal-input" id="adminNote" placeholder="Комментарий">
+            <button class="button primary" data-action="add-admin"><i data-lucide="user-plus"></i>Добавить</button>
+        </div>
+        <div class="zone-list">${(admin.admins || []).map(item => `<div class="zone-card"><strong>${item.telegramId}<em>${escapeHtml(item.note || "")}</em></strong><p class="muted">${formatDate(item.createdAt)}</p></div>`).join("")}</div>
+    </section>
+    <section class="section-panel">
+        <p class="eyebrow">Последние платежи</p>
+        <div class="zone-list">${(admin.recentPayments || []).map(item => `<div class="zone-card"><strong>${escapeHtml(item.provider)} · ${escapeHtml(item.planCode)}<em>${escapeHtml(item.status)}</em></strong><p class="muted">${item.telegramId} · ${escapeHtml(item.amount)} ${escapeHtml(item.currency)} · ${formatDate(item.createdAt)}</p></div>`).join("")}</div>
+    </section>
+    <section class="section-panel">
+        <p class="eyebrow">Новые пользователи</p>
+        <div class="zone-list">${(admin.recentUsers || []).map(item => `<div class="zone-card"><strong>${escapeHtml(item.firstName || "Пользователь")}<em>${item.telegramId}</em></strong><p class="muted">${item.username ? "@" + escapeHtml(item.username) + " · " : ""}${formatDate(item.createdAt)}</p></div>`).join("")}</div>
+    </section>`;
+}
+
+function adminStat(label, value) {
+    return `<div class="battle-stat"><small>${escapeHtml(label)}</small><strong>${escapeHtml(String(value))}</strong></div>`;
+}
+
+function adminPlanEditor(plan) {
+    return `<div class="admin-plan" data-admin-plan="${plan.code}">
+        <div>
+            <h3>${escapeHtml(plan.title)}</h3>
+            <p class="muted">${escapeHtml(plan.subtitle)}</p>
+        </div>
+        <div class="admin-price-grid">
+            <label>₽<input inputmode="numeric" data-field="rub" value="${plan.rub}"></label>
+            <label>Stars<input inputmode="numeric" data-field="stars" value="${plan.stars}"></label>
+            <label>USDT<input inputmode="decimal" data-field="usd" value="${plan.usd}"></label>
+            <label>Бейдж<input data-field="badge" value="${escapeHtml(plan.badge || "")}"></label>
+        </div>
+        <button class="button secondary" data-action="save-plan" data-plan-code="${plan.code}"><i data-lucide="save"></i>Сохранить тариф</button>
+    </div>`;
+}
+
 function metric(name, value, hint = "") {
     const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
     return `<div class="metric-row"><strong>${escapeHtml(name)}</strong><div class="track"><span class="fill" style="width:${safeValue}%"></span></div><span>${escapeHtml(String(hint || safeValue))}</span></div>`;
@@ -453,6 +523,12 @@ async function handleAction(event) {
     if (action === "add-meal") {
         await addMeal();
     }
+    if (action === "add-admin") {
+        await addAdmin();
+    }
+    if (action === "save-plan") {
+        await saveAdminPlan(event.currentTarget.dataset.planCode);
+    }
 }
 
 function finishOnboarding() {
@@ -466,11 +542,13 @@ function setView(view) {
     renderNav();
     render();
     if (view === "nutrition") loadNutrition();
+    if (view === "admin") loadAdmin();
 }
 
 function renderNav() {
     const navRoot = document.querySelector("#drawerNav");
-    navRoot.innerHTML = nav.map(([view, label, icon]) => `<button class="nav-item ${state.view === view ? "active" : ""}" data-nav="${view}"><i data-lucide="${icon}"></i><span>${label}</span></button>`).join("");
+    const items = state.boot?.isAdmin ? [...nav, adminNavItem] : nav;
+    navRoot.innerHTML = items.map(([view, label, icon]) => `<button class="nav-item ${state.view === view ? "active" : ""}" data-nav="${view}"><i data-lucide="${icon}"></i><span>${label}</span></button>`).join("");
     navRoot.querySelectorAll("[data-nav]").forEach(button => button.addEventListener("click", () => setView(button.dataset.nav)));
     refreshIcons();
 }
@@ -575,6 +653,60 @@ async function addMeal() {
         });
         render();
         toast("Добавлено в дневник.");
+    } catch (error) {
+        toast(error.message);
+    }
+}
+
+async function loadAdmin() {
+    if (!state.boot?.isAdmin) return;
+    try {
+        state.admin = await api("/api/admin", { method: "GET" });
+        if (state.view === "admin") render();
+    } catch (error) {
+        toast(error.message);
+    }
+}
+
+async function addAdmin() {
+    const id = Number(document.querySelector("#adminTelegramId")?.value || 0);
+    const note = document.querySelector("#adminNote")?.value || "";
+    if (!id) {
+        toast("Укажи Telegram ID.");
+        return;
+    }
+    try {
+        state.admin = await api("/api/admin/admins", {
+            method: "POST",
+            body: JSON.stringify({ telegramId: id, note })
+        });
+        render();
+        toast("Админ добавлен.");
+    } catch (error) {
+        toast(error.message);
+    }
+}
+
+async function saveAdminPlan(code) {
+    const root = document.querySelector(`[data-admin-plan="${code}"]`);
+    if (!root) return;
+    const value = field => root.querySelector(`[data-field="${field}"]`)?.value || "";
+    try {
+        const updated = await api(`/api/admin/plans/${code}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+                rub: Number(value("rub")),
+                stars: Number(value("stars")),
+                usd: value("usd"),
+                badge: value("badge")
+            })
+        });
+        state.boot.plans = state.boot.plans.map(plan => plan.code === code ? updated : plan);
+        if (state.admin?.plans) {
+            state.admin.plans = state.admin.plans.map(plan => plan.code === code ? updated : plan);
+        }
+        render();
+        toast("Тариф обновлён.");
     } catch (error) {
         toast(error.message);
     }
@@ -739,6 +871,20 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+function formatDate(value) {
+    if (!value) return "";
+    try {
+        return new Intl.DateTimeFormat("ru-RU", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
+        }).format(new Date(value));
+    } catch (_) {
+        return value;
+    }
 }
 
 initTelegram();

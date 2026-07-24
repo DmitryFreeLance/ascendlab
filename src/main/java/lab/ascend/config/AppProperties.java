@@ -7,6 +7,7 @@ public record AppProperties(
         String publicUrl,
         boolean demoMode,
         String dataDir,
+        String adminTelegramIds,
         Telegram telegram,
         Ai ai,
         Payments payments

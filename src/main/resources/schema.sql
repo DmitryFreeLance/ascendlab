@@ -55,3 +55,18 @@ CREATE TABLE IF NOT EXISTS nutrition_logs (
     carbs INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS admin_users (
+    telegram_id BIGINT PRIMARY KEY,
+    note VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS plan_settings (
+    code VARCHAR(32) PRIMARY KEY,
+    rub INT NOT NULL,
+    stars INT NOT NULL,
+    usd DECIMAL(12, 2) NOT NULL,
+    badge VARCHAR(64),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

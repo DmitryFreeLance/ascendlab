@@ -28,6 +28,7 @@ app:
   public-url: ${APP_PUBLIC_URL:http://localhost:${PORT:8080}}
   demo-mode: ${APP_DEMO_MODE:true}
   data-dir: ${APP_DATA_DIR:${user.home}/.ascendlab}
+  admin-telegram-ids: ${ADMIN_TELEGRAM_IDS:}
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
     bot-username: ${TELEGRAM_BOT_USERNAME:AscendLabRobot}

@@ -3,7 +3,7 @@ package lab.ascend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import lab.ascend.config.AppProperties;
 import lab.ascend.domain.PaymentStatus;
-import lab.ascend.domain.Plan;
+import lab.ascend.domain.PlanOffer;
 import lab.ascend.repo.PaymentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,23 +19,26 @@ public class PaymentService {
     private final CryptoPayClient cryptoPay;
     private final YooKassaClient yooKassa;
     private final SubscriptionService subscriptions;
+    private final PlanCatalogService plans;
 
     public PaymentService(AppProperties properties,
                           PaymentRepository payments,
                           TelegramBotService telegramBot,
                           CryptoPayClient cryptoPay,
                           YooKassaClient yooKassa,
-                          SubscriptionService subscriptions) {
+                          SubscriptionService subscriptions,
+                          PlanCatalogService plans) {
         this.properties = properties;
         this.payments = payments;
         this.telegramBot = telegramBot;
         this.cryptoPay = cryptoPay;
         this.yooKassa = yooKassa;
         this.subscriptions = subscriptions;
+        this.plans = plans;
     }
 
     public PaymentLink createStars(long telegramId, String planCode) {
-        Plan plan = Plan.byCode(planCode);
+        PlanOffer plan = plans.get(planCode);
         if (!properties.telegram().configured()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Telegram bot token is required for Stars invoices");
         }
@@ -46,7 +49,7 @@ public class PaymentService {
     }
 
     public PaymentLink createCrypto(long telegramId, String planCode) {
-        Plan plan = Plan.byCode(planCode);
+        PlanOffer plan = plans.get(planCode);
         if (!properties.payments().cryptoConfigured()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Crypto Pay token is not configured");
         }
@@ -57,7 +60,7 @@ public class PaymentService {
     }
 
     public PaymentLink createCard(long telegramId, String planCode) {
-        Plan plan = Plan.byCode(planCode);
+        PlanOffer plan = plans.get(planCode);
         if (!properties.payments().yookassaConfigured()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "YooKassa credentials are not configured");
@@ -83,7 +86,7 @@ public class PaymentService {
         }
         String paymentId = parts[0];
         long telegramId = Long.parseLong(parts[1]);
-        Plan plan = Plan.byCode(parts[2]);
+        PlanOffer plan = plans.get(parts[2]);
         if (alreadyPaid(paymentId)) {
             return;
         }
@@ -117,7 +120,7 @@ public class PaymentService {
         }
 
         PaymentRepository.PaymentRecord local = payments.findRequired(paymentId);
-        Plan plan = Plan.byCode(local.planCode());
+        PlanOffer plan = plans.get(local.planCode());
         payments.markStatus(paymentId, PaymentStatus.PAID, verified.id(), verified.raw());
         subscriptions.activate(local.telegramId(), plan, "yookassa", paymentId);
     }
@@ -126,7 +129,7 @@ public class PaymentService {
         if (!properties.demoMode()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        Plan plan = Plan.byCode(planCode);
+        PlanOffer plan = plans.get(planCode);
         subscriptions.activate(telegramId, plan, "demo", "demo");
     }
 

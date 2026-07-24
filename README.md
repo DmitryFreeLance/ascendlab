@@ -42,6 +42,7 @@ Required for production:
 
 - `APP_PUBLIC_URL`: public HTTPS URL of the service
 - `APP_CONTEXT_PATH`: optional path prefix such as `/ascendlab` when the Mini App shares an existing domain
+- `ADMIN_TELEGRAM_IDS`: comma-separated Telegram IDs that can see the Mini App admin panel
 - `TELEGRAM_BOT_TOKEN`: token from `@BotFather`
 - `TELEGRAM_BOT_USERNAME`: bot username without `@`
 - `TELEGRAM_WEBHOOK_SECRET`: long random string
@@ -165,6 +166,26 @@ https://your-domain.example/api/payments/yookassa/webhook/<YOOKASSA_WEBHOOK_SECR
 
 Set up HTTP notifications in YooKassa Merchant Profile: `Integration -> HTTP notifications`, select `payment.succeeded` and `payment.canceled`, and use the webhook URL above.
 
+## Admin Panel
+
+The Mini App shows the admin panel as the last drawer item only for admins.
+
+Seed the first admins with:
+
+```text
+ADMIN_TELEGRAM_IDS=123456789,987654321
+```
+
+Inside the admin panel you can:
+
+- add another admin by Telegram ID
+- edit plan prices in RUB, Telegram Stars and USDT
+- change plan badges
+- view users, active subscriptions, payments, RUB revenue, analyses and nutrition logs
+- view recent payments and recent users
+
+Changed plan prices are stored in H2 and immediately affect new Telegram Stars, Crypto Pay and YooKassa payments.
+
 ## Kie.ai Gemini 2.5 Flash
 
 Set `KIE_API_KEY`. AscendGPT uses streaming chat completions. Face analysis and nutrition estimation try Kie.ai when Pro access is active and fall back to local deterministic recommendations if the upstream API is unavailable.
@@ -190,6 +211,9 @@ YooKassa also requires a configured merchant account, shop ID and secret key. Ke
 - `POST /api/telegram/webhook/{secret}`
 - `POST /api/payments/crypto/webhook/{secret}`
 - `POST /api/payments/yookassa/webhook/{secret}`
+- `GET /api/admin`
+- `POST /api/admin/admins`
+- `PATCH /api/admin/plans/{code}`
 
 ## Verification
 
