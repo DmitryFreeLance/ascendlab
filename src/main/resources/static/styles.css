@@ -162,6 +162,10 @@ button {
     animation: enter 360ms ease both;
 }
 
+.view.onboarding-view {
+    animation: none;
+}
+
 @keyframes enter {
     from {
         opacity: 0;
@@ -637,6 +641,22 @@ h3 {
     grid-template-columns: repeat(6, 1fr);
     gap: 8px;
     margin-bottom: 20px;
+}
+
+.onboarding-panel {
+    isolation: isolate;
+}
+
+.onboarding-skip {
+    justify-self: end;
+}
+
+.onboarding-copy {
+    max-width: 680px;
+}
+
+.grid.two.onboarding-actions {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .story-progress span {
@@ -1139,6 +1159,39 @@ h3 {
 }
 
 @media (max-width: 720px) {
+    .topbar {
+        grid-template-columns: 42px 1fr 42px;
+        gap: 8px;
+        padding: calc(8px + var(--safe-top)) 10px 8px;
+    }
+
+    .icon-button {
+        width: 42px;
+        height: 42px;
+    }
+
+    .brand-pill {
+        height: 48px;
+        padding: 7px 10px;
+    }
+
+    .brand-mark {
+        width: 32px;
+        height: 32px;
+    }
+
+    .brand-pill strong {
+        font-size: 16px;
+    }
+
+    .brand-pill small {
+        font-size: 10px;
+    }
+
+    .app-shell {
+        padding: 10px 10px calc(22px + var(--safe-bottom));
+    }
+
     .dashboard-hero {
         grid-template-columns: 1fr;
     }
@@ -1156,6 +1209,112 @@ h3 {
     .section-panel,
     .modal-panel {
         padding: 20px;
+    }
+
+    .onboarding-panel {
+        min-height: calc(100svh - 76px - var(--safe-top));
+        padding: 14px 14px calc(96px + var(--safe-bottom));
+        gap: 12px;
+        backdrop-filter: none;
+    }
+
+    .onboarding-panel h1 {
+        font-size: clamp(28px, 9vw, 36px);
+        line-height: 1.02;
+        margin-bottom: 8px;
+    }
+
+    .onboarding-panel .muted {
+        font-size: 15px;
+        line-height: 1.42;
+        margin-bottom: 0;
+    }
+
+    .onboarding-panel .eyebrow {
+        margin-bottom: 6px;
+        font-size: 11px;
+    }
+
+    .onboarding-skip {
+        position: absolute;
+        top: 48px;
+        right: 14px;
+        min-height: 34px;
+        padding: 7px 11px;
+        background: rgba(255, 255, 255, 0.86);
+        z-index: 3;
+    }
+
+    .story-progress {
+        gap: 5px;
+        margin-bottom: 4px;
+        padding-right: 106px;
+    }
+
+    .story-progress span {
+        height: 4px;
+    }
+
+    .story-art {
+        min-height: clamp(164px, 35svh, 250px);
+    }
+
+    .days-ring {
+        width: min(188px, 56vw);
+    }
+
+    .days-ring strong {
+        font-size: 54px;
+    }
+
+    .days-ring span {
+        font-size: 11px;
+    }
+
+    .bar-chart {
+        min-height: 176px;
+        padding: 16px 10px 32px;
+        gap: 6px;
+    }
+
+    .halo-grid,
+    .route-grid {
+        padding: 12px;
+        gap: 8px;
+    }
+
+    .halo-card,
+    .route-tile {
+        min-height: 104px;
+        padding: 12px;
+    }
+
+    .lab-visual {
+        min-height: 190px;
+    }
+
+    .grid.two.onboarding-actions {
+        position: fixed;
+        left: max(10px, calc((100vw - 880px) / 2 + 10px));
+        right: max(10px, calc((100vw - 880px) / 2 + 10px));
+        bottom: calc(18px + var(--safe-bottom));
+        z-index: 30;
+        grid-template-columns: 0.74fr 1.26fr;
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.92);
+        border-radius: var(--radius);
+        background: rgba(247, 251, 255, 0.82);
+        box-shadow: 0 18px 46px rgba(42, 67, 94, 0.20);
+        backdrop-filter: blur(22px);
+    }
+
+    .grid.two.onboarding-actions.single {
+        grid-template-columns: 1fr;
+    }
+
+    .onboarding-actions .button {
+        min-height: 52px;
     }
 
     .metric-row {
@@ -1178,23 +1337,32 @@ h3 {
         padding-right: 10px;
     }
 
-    .topbar {
-        grid-template-columns: 42px 1fr 42px;
-        gap: 8px;
-        padding-left: 10px;
-        padding-right: 10px;
-    }
-
-    .icon-button {
-        width: 42px;
-        height: 42px;
-    }
-
     .brand-pill small {
         display: none;
     }
 
     h1 {
         font-size: 34px;
+    }
+
+    .onboarding-panel {
+        padding-left: 12px;
+        padding-right: 12px;
+        gap: 10px;
+    }
+
+    .story-art {
+        min-height: clamp(142px, 30svh, 210px);
+    }
+
+    .onboarding-panel h1 {
+        font-size: 29px;
+    }
+
+    .grid.two.onboarding-actions {
+        left: 8px;
+        right: 8px;
+        bottom: calc(18px + var(--safe-bottom));
+        padding: 8px;
     }
 }

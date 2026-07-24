@@ -151,24 +151,24 @@ function render() {
         battle: renderBattle,
         admin: renderAdmin
     }[state.view] || renderDashboard;
-    app.innerHTML = `<div class="view">${view()}</div>`;
+    app.innerHTML = `<div class="view ${state.view === "onboarding" ? "onboarding-view" : ""}">${view()}</div>`;
     bindView();
     refreshIcons();
 }
 
 function renderOnboarding() {
     const slide = onboarding[state.onboardingStep];
-    return `<section class="hero-panel">
+    return `<section class="hero-panel onboarding-panel">
         <div class="story-progress">${onboarding.map((_, i) => `<span style="--progress:${i < state.onboardingStep ? 100 : i === state.onboardingStep ? 68 : 0}%"></span>`).join("")}</div>
-        <button class="chip" data-action="skip-onboarding" style="justify-self:end">Пропустить</button>
+        <button class="chip onboarding-skip" data-action="skip-onboarding">Пропустить</button>
         <div class="story-art">${slide.art()}</div>
-        <div>
+        <div class="onboarding-copy">
             <p class="eyebrow">${slide.eyebrow}</p>
             <h1>${slide.title}</h1>
             <p class="muted">${slide.text}</p>
         </div>
-        <div class="grid two">
-            <button class="button quiet" data-action="prev-onboarding" ${state.onboardingStep === 0 ? "disabled" : ""}><i data-lucide="chevron-left"></i>Назад</button>
+        <div class="grid two onboarding-actions ${state.onboardingStep === 0 ? "single" : ""}">
+            ${state.onboardingStep === 0 ? "" : `<button class="button quiet" data-action="prev-onboarding"><i data-lucide="chevron-left"></i>Назад</button>`}
             <button class="button primary" data-action="next-onboarding">${state.onboardingStep === onboarding.length - 1 ? "Начать" : "Далее"}<i data-lucide="chevron-right"></i></button>
         </div>
     </section>`;
@@ -506,12 +506,14 @@ async function handleAction(event) {
     if (action === "prev-onboarding") {
         state.onboardingStep = Math.max(0, state.onboardingStep - 1);
         render();
+        resetScroll();
     }
     if (action === "next-onboarding") {
         if (state.onboardingStep === onboarding.length - 1) finishOnboarding();
         else {
             state.onboardingStep += 1;
             render();
+            resetScroll();
         }
     }
     if (action === "open-payment") {
@@ -534,6 +536,7 @@ async function handleAction(event) {
 function finishOnboarding() {
     localStorage.setItem("ascendlab:onboarding", "1");
     setView("dashboard");
+    resetScroll();
 }
 
 function setView(view) {
@@ -543,6 +546,10 @@ function setView(view) {
     render();
     if (view === "nutrition") loadNutrition();
     if (view === "admin") loadAdmin();
+}
+
+function resetScroll() {
+    requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 
 function renderNav() {
