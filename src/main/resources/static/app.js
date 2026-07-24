@@ -94,8 +94,10 @@ function initTelegram() {
     tg.setBottomBarColor("#f7fbff");
     try { tg.BackButton?.hide?.(); } catch (_) {}
     try { tg.SettingsButton?.hide?.(); } catch (_) {}
-    if (tg.isVersionAtLeast?.("8.0")) {
-        try { tg.requestFullscreen(); } catch (_) {}
+    // Fullscreen makes Telegram render native close/menu controls over the app.
+    // Expanded mode keeps the Mini App tall while preserving a separate Telegram header.
+    if (tg.isFullscreen && tg.isVersionAtLeast?.("8.0")) {
+        try { tg.exitFullscreen(); } catch (_) {}
     }
 }
 
