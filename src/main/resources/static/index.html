@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f7fbff">
     <title>BodyLab</title>
-    <link rel="stylesheet" href="styles.css?v=20260724-bodylab-polish">
+    <link rel="stylesheet" href="styles.css?v=20260725-kinetic">
     <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
 </head>
@@ -49,24 +49,40 @@
         <div class="payment-methods">
             <button class="method-row" data-provider="stars">
                 <span class="method-icon"><i data-lucide="star"></i></span>
-                <span><strong>Telegram Stars</strong><small>основной способ для цифрового доступа</small></span>
+                <span><strong>Telegram Stars</strong><small>моментально внутри Telegram</small></span>
                 <i data-lucide="chevron-right"></i>
             </button>
             <button class="method-row" data-provider="crypto">
                 <span class="method-icon"><i data-lucide="badge-dollar-sign"></i></span>
-                <span><strong>Crypto Bot</strong><small>Crypto Pay · USDT / TON</small></span>
+                <span><strong>Crypto Bot</strong><small>USDT / TON</small></span>
                 <i data-lucide="chevron-right"></i>
             </button>
             <button class="method-row" data-provider="card">
                 <span class="method-icon"><i data-lucide="credit-card"></i></span>
-                <span><strong>Карта</strong><small>YooKassa · webhook activation</small></span>
+                <span><strong>Карта</strong><small>СБП/Карта/Юмани</small></span>
                 <i data-lucide="chevron-right"></i>
             </button>
         </div>
-        <p class="legal-note">
-            Карточные платежи проходят через YooKassa. Для цифровых товаров внутри Telegram отдельно проверьте правила Telegram, App Store / Google Play и настройки вашего магазина.
-        </p>
         <button class="button secondary" id="demoActivateButton">Активировать демо-доступ</button>
+    </div>
+</section>
+
+<section class="modal-layer" id="accessModal" aria-hidden="true">
+    <div class="modal-panel access-panel" role="dialog" aria-modal="true" aria-labelledby="accessTitle">
+        <button class="icon-button modal-close" data-close-modal aria-label="Закрыть"><i data-lucide="x"></i></button>
+        <div class="access-spark"><i data-lucide="badge-check"></i></div>
+        <p class="eyebrow">Спасибо за оплату</p>
+        <h2 id="accessTitle">BodyPro активирован</h2>
+        <p class="muted" id="accessSubtitle">Доступ открыт.</p>
+        <div class="access-feature-grid">
+            <span><i data-lucide="scan-face"></i>Анализ лица</span>
+            <span><i data-lucide="brain"></i>BodyGPT</span>
+            <span><i data-lucide="calendar-days"></i>60 дней</span>
+            <span><i data-lucide="utensils"></i>Питание</span>
+            <span><i data-lucide="graduation-cap"></i>Гайды</span>
+            <span><i data-lucide="swords"></i>MogBattle</span>
+        </div>
+        <button class="button primary" data-close-modal>Продолжить</button>
     </div>
 </section>
 
@@ -100,6 +116,6 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="app.js?v=20260724-bodylab-polish"></script>
+<script src="app.js?v=20260725-kinetic"></script>
 </body>
 </html>

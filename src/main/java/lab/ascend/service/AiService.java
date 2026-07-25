@@ -44,7 +44,7 @@ public class AiService {
                 .build();
     }
 
-    public void streamChat(UserProfile user, boolean subscribed, String message, OutputStream outputStream) {
+    public void streamChat(UserProfile user, boolean subscribed, String message, List<ChatMessage> history, OutputStream outputStream) {
         try (OutputStreamWriter writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)) {
             if (!subscribed) {
                 writeSlowly(writer, FREE_MESSAGE);
@@ -53,7 +53,7 @@ public class AiService {
             }
             if (properties.ai().configured()) {
                 try {
-                    streamKie(writer, user, message);
+                    streamKie(writer, user, message, history);
                     writeEvent(writer, "done", Map.of("ok", true));
                     return;
                 } catch (Exception ex) {
@@ -127,22 +127,28 @@ public class AiService {
         }
     }
 
-    private void streamKie(OutputStreamWriter writer, UserProfile user, String message) throws Exception {
+    private void streamKie(OutputStreamWriter writer, UserProfile user, String message, List<ChatMessage> history) throws Exception {
+        List<Map<String, Object>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", """
+                Ты BodyGPT, персональный AI-ассистент BodyLab по внешности, уходу, стилю, питанию и привычкам.
+                Отвечай по-русски, конкретно, бережно и практично.
+                Не используй markdown, звёздочки, жирный текст и списки со звёздочками. Для списков используй короткие строки с дефисом.
+                Не обещай медицинский эффект.
+                Давай короткий план действий, если вопрос широкий.
+                """));
+        for (ChatMessage item : safeHistory(history)) {
+            String role = "assistant".equals(item.role()) ? "assistant" : "user";
+            messages.add(Map.of("role", role, "content", stripMarkdown(item.text())));
+        }
+        messages.add(Map.of("role", "user", "content", List.of(Map.of(
+                "type", "text",
+                "text", "Пользователь: " + user.displayName() + ". Вопрос: " + message
+        ))));
         Map<String, Object> request = Map.of(
                 "model", "gemini-2.5-flash",
                 "stream", true,
                 "temperature", BigDecimal.valueOf(0.72),
-                "messages", List.of(
-                        Map.of("role", "system", "content", """
-                                Ты BodyGPT, персональный AI-ассистент BodyLab по внешности, уходу, стилю, питанию и привычкам.
-                                Отвечай по-русски, конкретно, бережно и практично. Не обещай медицинский эффект.
-                                Давай короткий план действий, если вопрос широкий.
-                                """),
-                        Map.of("role", "user", "content", List.of(Map.of(
-                                "type", "text",
-                                "text", "Пользователь: " + user.displayName() + ". Вопрос: " + message
-                        )))
-                )
+                "messages", messages
         );
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(properties.ai().kieApiUrl()))
@@ -253,6 +259,28 @@ public class AiService {
                 """.formatted(user.displayName(), message).trim();
     }
 
+    private List<ChatMessage> safeHistory(List<ChatMessage> history) {
+        if (history == null || history.isEmpty()) {
+            return List.of();
+        }
+        return history.stream()
+                .filter(item -> item != null && item.text() != null && !item.text().isBlank())
+                .skip(Math.max(0, history.size() - 8))
+                .map(item -> new ChatMessage(item.role(), clip(stripMarkdown(item.text()), 700)))
+                .toList();
+    }
+
+    private String stripMarkdown(String value) {
+        return value == null ? "" : value
+                .replace("**", "")
+                .replace("*", "")
+                .trim();
+    }
+
+    private String clip(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
     private static String stripCodeBlock(String content) {
         String value = content == null ? "" : content.trim();
         if (value.startsWith("```")) {
@@ -269,5 +297,8 @@ public class AiService {
     }
 
     public record NutritionEstimate(String title, int calories, int protein, int fat, int carbs) {
+    }
+
+    public record ChatMessage(String role, String text) {
     }
 }

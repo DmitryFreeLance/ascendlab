@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/chat")
 public class ChatController {
@@ -33,13 +35,13 @@ public class ChatController {
                                                         @RequestBody ChatRequest request) {
         UserProfile user = currentUser.require(initData);
         boolean active = subscriptions.isActive(user.telegramId());
-        StreamingResponseBody body = output -> ai.streamChat(user, active, request.message(), output);
+        StreamingResponseBody body = output -> ai.streamChat(user, active, request.message(), request.history(), output);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noCache())
                 .contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(body);
     }
 
-    public record ChatRequest(@NotBlank String message) {
+    public record ChatRequest(@NotBlank String message, List<AiService.ChatMessage> history) {
     }
 }

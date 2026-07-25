@@ -6,6 +6,11 @@ const APP_BASE_PATH = (() => {
 })();
 const ONBOARDING_KEY = "bodylab:onboarding";
 const LEGACY_ONBOARDING_KEY = "ascendlab:onboarding";
+const MAX_CHAT_MESSAGES = 28;
+const CHAT_CONTEXT_MESSAGES = 8;
+const CHAT_TYPE_DELAY = 24;
+const CHAT_RENDER_INTERVAL = 42;
+const CHAT_PUNCTUATION_DELAY = 96;
 
 function apiPath(path) {
     return `${APP_BASE_PATH}${path}`;
@@ -22,10 +27,54 @@ const state = {
     nutrition: null,
     admin: null,
     accessNotice: null,
+    pendingAccessPlan: null,
+    busy: { analysis: false, meal: false, chat: false, payment: false, battle: false },
+    planReports: {},
+    selectedPlanDay: null,
+    battleOpponent: "neo",
+    battleResult: null,
+    battleHistory: [],
     mealType: "dinner",
     chat: [],
     settings: { gender: "male", age: 25, languageCode: "ru" }
 };
+
+const planPhases = [
+    {
+        from: 1,
+        to: 7,
+        title: "База и диагностика",
+        accent: "Стабилизировать кожу, сон, воду и контрольные фото.",
+        tasks: ["Утренний уход: очищение, увлажнение, SPF", "2 литра воды или личная норма", "Сон 7+ часов", "Контрольное фото при дневном свете"]
+    },
+    {
+        from: 8,
+        to: 21,
+        title: "Контур и подача",
+        accent: "Стрижка, брови, осанка, свет и выражение лица.",
+        tasks: ["Проверить контур стрижки у висков", "10 минут осанки и шеи", "Три фото с разным светом", "Выбрать 2 цвета, которые освежают лицо"]
+    },
+    {
+        from: 22,
+        to: 45,
+        title: "Тело и стиль",
+        accent: "Закрепить питание, силуэт, гардеробные связки и ритм.",
+        tasks: ["Белок в каждом основном приёме пищи", "Тренировка или 8000 шагов", "Один собранный образ без случайных вещей", "Отметить, что реально улучшило внешний вид"]
+    },
+    {
+        from: 46,
+        to: 60,
+        title: "Финальная полировка",
+        accent: "Собрать лучший образ, обновить фото и закрепить систему.",
+        tasks: ["Повторить фото из первого дня", "Обновить стрижку или укладку", "Выбрать лучший профильный снимок", "Записать правило, которое оставляем дальше"]
+    }
+];
+
+const battleOpponents = [
+    { id: "neo", name: "Неон", tier: "сильный свет", score: 86, image: "assets/battle/fake-neo.jpg" },
+    { id: "soft", name: "Софт", tier: "ровная подача", score: 63, image: "assets/battle/fake-soft.jpg" },
+    { id: "raw", name: "Роу", tier: "сырой ракурс", score: 49, image: "assets/battle/fake-raw.jpg" }
+];
 
 const nav = [
     ["dashboard", "Профиль", "user-round"],
@@ -129,6 +178,7 @@ async function bootstrap() {
             age: state.boot.user.age || 25,
             languageCode: state.boot.user.languageCode || "ru"
         };
+        loadLocalState();
         state.selectedPlan = state.boot.plans.find(plan => plan.code === "quarter")?.code || state.boot.plans[0].code;
         renderNav();
         const seen = Boolean(state.boot.onboardingSeen || localStorage.getItem(ONBOARDING_KEY) || localStorage.getItem(LEGACY_ONBOARDING_KEY));
@@ -137,8 +187,9 @@ async function bootstrap() {
         } else if (!state.boot.onboardingSeen) {
             completeOnboardingRemote();
         }
-        showReturnPaymentNotice();
+        const returnPlan = showReturnPaymentNotice();
         render();
+        if (returnPlan) openAccessModal(returnPlan);
     } catch (error) {
         document.querySelector("#app").innerHTML = `<section class="section-panel"><h2>Не удалось запустить BodyLab</h2><p class="muted">${escapeHtml(error.message)}</p></section>`;
     }
@@ -244,8 +295,8 @@ function renderAccessNotice() {
 function renderFeatures() {
     return `<section class="section-panel">
         <p class="eyebrow">Все функции</p>
-        <h1>14+ инструментов</h1>
-        <p class="muted">Полный список того, что открывается в BodyPro. Раздел вакансий исключён.</p>
+        <h1>14 инструментов</h1>
+        <p class="muted">Полный список того, что открывается в BodyPro.</p>
         <div class="grid three">${state.boot.features.map(featureCard).join("")}</div>
         <button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Получить доступ</button>
     </section>`;
@@ -261,7 +312,7 @@ function renderAnalysis() {
             ${uploadTile("front", "Анфас", "хорошее освещение")}
             ${uploadTile("side", "Профиль", "по желанию")}
         </div>
-        <button class="button primary" data-action="run-analysis"><i data-lucide="scan-line"></i>Оценить лицо</button>
+        <button class="button primary" data-action="run-analysis" ${state.busy.analysis ? "disabled" : ""}>${buttonContent("Оценить лицо", "Сканирую...", "scan-line", state.busy.analysis)}</button>
     </section>
     ${result ? renderAnalysisResult(result) : ""}
     <section class="section-panel">
@@ -275,12 +326,13 @@ function renderAnalysis() {
 function renderAnalysisResult(result) {
     const metrics = result.metrics || [];
     const zones = result.zones || [];
+    const routine = Array.isArray(result.routine) ? result.routine.filter(Boolean).slice(0, 5) : [];
+    const style = Array.isArray(result.style) ? result.style.filter(Boolean).slice(0, 8) : [];
     const score = Math.max(0, Math.min(100, Number(result.score) || 0));
     return `<section class="section-panel analysis-result">
         <div class="analysis-score-card">
             <div class="score-orbit" style="--score:${score}">
-                <strong>${score}</strong>
-                <span>/100</span>
+                <div class="score-center"><strong>${score}</strong><span>/100</span></div>
             </div>
             <div>
                 <p class="eyebrow">Результат скана</p>
@@ -292,6 +344,18 @@ function renderAnalysisResult(result) {
             ${metrics.map(analysisMetric).join("")}
         </div>
         ${zones.length ? `<div class="analysis-zone-grid">${zones.map(analysisZone).join("")}</div>` : ""}
+        ${routine.length || style.length ? `<div class="analysis-next-grid">
+            ${routine.length ? `<article class="analysis-plan-card">
+                <p class="eyebrow">Маршрут</p>
+                <h3>Первые действия</h3>
+                <ol class="routine-list">${routine.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+            </article>` : ""}
+            ${style.length ? `<article class="analysis-plan-card">
+                <p class="eyebrow">Подача</p>
+                <h3>Цвета и стиль</h3>
+                <div class="style-token-list">${style.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+            </article>` : ""}
+        </div>` : ""}
     </section>`;
 }
 
@@ -302,7 +366,7 @@ function analysisMetric(item) {
             <strong>${escapeHtml(item.name)}</strong>
             <span>${value}%</span>
         </div>
-        <div class="track"><span class="fill" style="width:${value}%"></span></div>
+        <div class="track live-track"><span class="fill" style="--value:${value};width:${value}%"></span></div>
         <p class="muted">${escapeHtml(item.hint || "")}</p>
     </article>`;
 }
@@ -324,34 +388,78 @@ function renderPlan() {
             <button class="button primary" data-action="open-payment"><i data-lucide="lock-keyhole-open"></i>Получить доступ</button>
         </section>`;
     }
-    return `<section class="section-panel">
-        <p class="eyebrow">60 дней</p>
-        <h1>Маршрут преображения</h1>
-        <div class="timeline">
-            ${[
-                ["Дни 1-7", "Стабилизировать кожу, воду, сон и базовую подачу."],
-                ["Дни 8-21", "Стрижка, форма бровей, цветовая палитра, контрольные фото."],
-                ["Дни 22-45", "Тело, питание, гардеробные связки, социальная подача."],
-                ["Дни 46-60", "Финальная полировка образа и новые фото для профилей."]
-            ].map(([title, text]) => `<div class="timeline-step"><h3>${title}</h3><p class="muted">${text}</p></div>`).join("")}
+    const day = selectedPlanDay();
+    const phase = planPhase(day);
+    const report = planReport(day);
+    const done = report.tasks.filter(Boolean).length;
+    const savedReports = Object.values(state.planReports).filter(item => item.updatedAt);
+    const progress = savedReports.length
+        ? Math.round(savedReports.reduce((sum, item) => sum + (item.completion || 0), 0) / savedReports.length * 100)
+        : 0;
+    return `<section class="section-panel plan-hero">
+        <div>
+            <p class="eyebrow">60 дней</p>
+            <h1>Дневной маршрут</h1>
+            <p class="muted">Каждый день BodyLab даёт фокус, задачи и сохраняет короткий отчёт. Так маршрут превращается в систему, а не в список обещаний.</p>
         </div>
+        <div class="plan-radar" style="--progress:${progress}">
+            <strong>${progress}%</strong>
+            <span>по отчётам</span>
+        </div>
+    </section>
+    <section class="section-panel day-board">
+        <div class="day-board-head">
+            <button class="icon-button ghost" data-plan-day="${Math.max(1, day - 1)}" aria-label="Предыдущий день"><i data-lucide="chevron-left"></i></button>
+            <div>
+                <p class="eyebrow">${phase.title}</p>
+                <h2>День ${day}</h2>
+                <p class="muted">${phase.accent}</p>
+            </div>
+            <button class="icon-button ghost" data-plan-day="${Math.min(60, day + 1)}" aria-label="Следующий день"><i data-lucide="chevron-right"></i></button>
+        </div>
+        <div class="day-progress-line"><span style="width:${Math.round((done / phase.tasks.length) * 100)}%"></span></div>
+        <div class="task-list">
+            ${phase.tasks.map((task, index) => `<label class="task-item ${report.tasks[index] ? "done" : ""}">
+                <input type="checkbox" data-plan-task="${index}" ${report.tasks[index] ? "checked" : ""}>
+                <span><i data-lucide="${report.tasks[index] ? "check" : "circle"}"></i></span>
+                <strong>${escapeHtml(task)}</strong>
+            </label>`).join("")}
+        </div>
+        <div class="mood-row">
+            ${["свежо", "норм", "устал", "рывок"].map(mood => `<button class="chip ${report.mood === mood ? "active" : ""}" data-plan-mood="${mood}">${mood}</button>`).join("")}
+        </div>
+        <textarea class="note-input" id="planNote" rows="4" placeholder="Короткий отчёт дня: что сделал, что сработало, что мешало">${escapeHtml(report.note || "")}</textarea>
+        <button class="button primary" data-action="save-plan-report"><i data-lucide="clipboard-check"></i>Сохранить отчёт дня</button>
+    </section>
+    <section class="section-panel report-board">
+        <p class="eyebrow">Отчётность</p>
+        <h2>Последние дни</h2>
+        <div class="report-list">${renderPlanReportList()}</div>
+    </section>
+    <section class="section-panel">
+        <p class="eyebrow">Карта этапов</p>
+        <div class="timeline">${planPhases.map(phase => `<button class="timeline-step ${day >= phase.from && day <= phase.to ? "active" : ""}" data-plan-day="${phase.from}">
+            <h3>Дни ${phase.from}-${phase.to}</h3>
+            <p class="muted">${phase.accent}</p>
+        </button>`).join("")}</div>
     </section>`;
 }
 
 function renderGpt() {
     if (state.chat.length === 0) {
         state.chat.push({ role: "assistant", text: "Привет. Я BodyGPT — AI-ассистент по внешности. Могу разобрать уход, стрижку, питание, стиль и план на неделю." });
+        saveChatHistory();
     }
     return `<section class="section-panel chat-window">
         <div class="assistant-head">
             <span class="brand-mark">AI</span>
             <div><h3>BodyGPT</h3><p class="eyebrow" style="margin:0">на связи</p></div>
         </div>
-        <div class="chat-list" id="chatList">${state.chat.map(message => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`).join("")}</div>
+        <div class="chat-list" id="chatList">${state.chat.map(chatMessageHtml).join("")}</div>
         <div class="chips">${["Отёки", "С чего начать", "Питание", "План на неделю"].map(text => `<button class="chip" data-chat-chip="${text}">${text}</button>`).join("")}</div>
         <form class="composer" id="chatForm">
-            <input id="chatInput" placeholder="Спроси что-нибудь..." autocomplete="off">
-            <button class="button primary send-button" aria-label="Отправить"><i data-lucide="send"></i></button>
+            <input id="chatInput" placeholder="Спроси что-нибудь..." autocomplete="off" ${state.busy.chat ? "disabled" : ""}>
+            <button class="button primary send-button" aria-label="Отправить" ${state.busy.chat ? "disabled" : ""}>${state.busy.chat ? `<span class="mini-loader"></span>` : `<i data-lucide="send"></i>`}</button>
         </form>
     </section>`;
 }
@@ -380,7 +488,7 @@ function renderNutrition() {
                 return `<button data-value="${value}" class="${state.mealType === value ? "active" : ""}">${label}</button>`;
             }).join("")}</div>
             <input class="meal-input" id="mealInput" placeholder="Напр.: 2 яйца, тост с авокадо">
-            <button class="button primary" data-action="add-meal"><i data-lucide="wand-sparkles"></i>Оценить и добавить</button>
+            <button class="button primary" data-action="add-meal" ${state.busy.meal ? "disabled" : ""}>${buttonContent("Оценить и добавить", "Считаю КБЖУ...", "wand-sparkles", state.busy.meal)}</button>
             <div class="zone-list">${(data.logs || []).map(log => `<div class="zone-card"><strong>${escapeHtml(log.title)}<em>${log.calories} ккал</em></strong><p class="muted">Б ${log.protein} · Ж ${log.fat} · У ${log.carbs}</p></div>`).join("")}</div>
         </div>
     </section>`;
@@ -388,35 +496,94 @@ function renderNutrition() {
 
 function renderAcademy() {
     const guides = [
-        ["Softmaxxing", "Кожа", "База ухода без хаоса и лишних активов."],
-        ["Softmaxxing", "Фото и подача", "Свет, ракурс, выражение и профильные фото."],
-        ["Softmaxxing", "Волосы", "Контур, длина, плотность и общение с мастером."],
-        ["Hardmaxxing", "Тело", "Силовой минимум, питание, осанка и силуэт."]
+        {
+            tag: "Softmaxxing",
+            title: "Кожа",
+            intro: "База ухода без хаоса и лишних активов.",
+            steps: ["Утро: мягкое очищение, увлажнение, SPF.", "Вечер: очищение и восстановление барьера.", "Новые активы вводятся по одному, минимум на 10-14 дней."]
+        },
+        {
+            tag: "Softmaxxing",
+            title: "Фото и подача",
+            intro: "Свет, ракурс, выражение и профильные фото.",
+            steps: ["Камера на уровне глаз, лицо не снизу.", "Свет из окна под 30-45 градусов.", "Нейтральное выражение, расслабленная нижняя треть лица."]
+        },
+        {
+            tag: "Softmaxxing",
+            title: "Волосы",
+            intro: "Контур, длина, плотность и общение с мастером.",
+            steps: ["Сначала чистый контур у висков и затылка.", "Сохрани объём там, где он усиливает форму лица.", "Покажи мастеру 2 референса и 1 антипример."]
+        },
+        {
+            tag: "Hardmaxxing",
+            title: "Тело",
+            intro: "Силовой минимум, питание, осанка и силуэт.",
+            steps: ["3 силовые тренировки в неделю или домашний минимум.", "Белок в каждом основном приёме пищи.", "Каждый день 8-10 минут шея, грудной отдел, плечи."]
+        }
     ];
     return `<section class="section-panel">
         <p class="eyebrow">Академия</p>
         <h1>Гайды</h1>
         <p class="muted">База знаний по внешности: уход, стиль, тренировки, питание.</p>
-        <div class="grid two">${guides.map(([tag, title, text]) => `<div class="guide-card"><span class="badge">${tag}</span><h3>${title}</h3><small>${text}</small><button class="button secondary">Смотреть гайд</button></div>`).join("")}</div>
+        <div class="grid two">${guides.map(guide => `<article class="guide-card">
+            <span class="badge">${guide.tag}</span>
+            <h3>${guide.title}</h3>
+            <small>${guide.intro}</small>
+            <ul class="guide-list">${guide.steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
+        </article>`).join("")}</div>
     </section>`;
 }
 
 function renderBattle() {
+    const opponent = selectedBattleOpponent();
+    const ownPreview = state.previews.front;
+    const ownScore = battleOwnScore();
+    const winrate = state.battleHistory.length
+            ? Math.round(state.battleHistory.filter(item => item.result === "win").length / state.battleHistory.length * 100)
+            : 0;
+    const elo = 800 + state.battleHistory.reduce((sum, item) => sum + item.eloDelta, 0);
     return `<section class="section-panel battle-arena">
         <p class="eyebrow">MogBattle</p>
         <h1>MogBattle</h1>
-        <p class="muted">Сравни свой результат с другим игроком и узнай, кто сильнее в баттле. Для честного боя сначала нужен анализ.</p>
+        <p class="muted">Сравни своё загруженное лицо с контрольным профилем. Чем точнее фото и свежий анализ, тем честнее баттл.</p>
         <div class="battle-stats">
-            <div class="battle-stat"><small>ELO</small><strong>800</strong></div>
-            <div class="battle-stat"><small>Ранг</small><strong>Mog C</strong></div>
-            <div class="battle-stat"><small>Winrate</small><strong>0%</strong></div>
+            <div class="battle-stat"><small>ELO</small><strong>${elo}</strong></div>
+            <div class="battle-stat"><small>Ранг</small><strong>${elo >= 930 ? "Mog A" : elo >= 850 ? "Mog B" : "Mog C"}</strong></div>
+            <div class="battle-stat"><small>Winrate</small><strong>${winrate}%</strong></div>
         </div>
-        <button class="button primary" data-view="analysis"><i data-lucide="scan-face"></i>Сделать анализ лица</button>
-        <div class="grid two">
-            <button class="button secondary">Топ 30 по ELO</button>
-            <button class="button secondary">История боёв</button>
+        <div class="battle-stage">
+            <div class="fighter-card">
+                <div class="fighter-photo ${ownPreview ? "has-photo" : ""}">${ownPreview ? `<img src="${ownPreview}" alt="">` : `<span class="brand-mark">B</span>`}</div>
+                <strong>Ты</strong>
+                <small>${ownScore ? `${ownScore}/100` : "нужен анализ или фото"}</small>
+            </div>
+            <div class="versus-core">VS</div>
+            <div class="fighter-card">
+                <div class="fighter-photo has-photo"><img src="${opponent.image}" alt=""></div>
+                <strong>${opponent.name}</strong>
+                <small>${opponent.tier} · ${opponent.score}/100</small>
+            </div>
         </div>
+        <div class="opponent-strip">${battleOpponents.map(item => `<button class="opponent-chip ${item.id === opponent.id ? "active" : ""}" data-battle-opponent="${item.id}">
+            <img src="${item.image}" alt=""><span>${item.name}</span><small>${item.score}/100</small>
+        </button>`).join("")}</div>
+        <button class="button primary" data-action="run-battle" ${state.busy.battle ? "disabled" : ""}>${buttonContent("Запустить баттл", "Сравниваю...", "swords", state.busy.battle)}</button>
+        ${state.battleResult ? renderBattleResult() : ""}
+        <div class="zone-list">${state.battleHistory.slice(0, 4).map(item => `<div class="zone-card"><strong>${escapeHtml(item.name)}<em>${item.result === "win" ? "победа" : item.result === "tie" ? "ничья" : "поражение"}</em></strong><p class="muted">${item.ownScore} vs ${item.opponentScore} · ELO ${item.eloDelta > 0 ? "+" : ""}${item.eloDelta}</p></div>`).join("")}</div>
     </section>`;
+}
+
+function renderBattleResult() {
+    const result = state.battleResult;
+    return `<div class="battle-result ${result.result}">
+        <p class="eyebrow">${result.result === "win" ? "Победа" : result.result === "tie" ? "Ничья" : "Поражение"}</p>
+        <h2>${result.ownScore} : ${result.opponentScore}</h2>
+        <div class="battle-scoreline">
+            <span><b>Ты</b><i style="width:${result.ownScore}%"></i></span>
+            <span><b>${escapeHtml(result.name)}</b><i style="width:${result.opponentScore}%"></i></span>
+        </div>
+        <p class="muted">${escapeHtml(result.advice)}</p>
+    </div>`;
 }
 
 function renderAdmin() {
@@ -443,10 +610,10 @@ function renderAdmin() {
             <span class="admin-live-dot"></span>
             <h3>Система</h3>
             <div class="admin-status-grid">
-                ${adminStatus("Bot", admin.system?.botConfigured, admin.system?.longPolling ? "long polling" : "webhook")}
-                ${adminStatus("AI", admin.system?.aiConfigured, "Kie Gemini")}
-                ${adminStatus("Card", admin.system?.cardConfigured, "YooKassa")}
-                ${adminStatus("Crypto", admin.system?.cryptoConfigured, "CryptoBot")}
+                ${adminStatus("Бот", admin.system?.botConfigured, admin.system?.longPolling ? "принимает сообщения" : "подключён")}
+                ${adminStatus("Ассистент", admin.system?.aiConfigured, "ответы и анализ")}
+                ${adminStatus("Карты", admin.system?.cardConfigured, "СБП/Карта/Юмани")}
+                ${adminStatus("Крипто", admin.system?.cryptoConfigured, "счета в Telegram")}
             </div>
         </div>
     </section>
@@ -454,9 +621,9 @@ function renderAdmin() {
         <p class="eyebrow">Пульс проекта</p>
         <div class="admin-kpi-grid">
             ${adminKpi("Пользователи", stats.users || 0, `+${stats.newUsers7d || 0} за 7 дней`, "users")}
-            ${adminKpi("Активные Pro", stats.activeSubscriptions || 0, `${conversion}% paid/user`, "sparkles")}
+            ${adminKpi("Активные Pro", stats.activeSubscriptions || 0, `${conversion}% пользователей оплатили`, "sparkles")}
             ${adminKpi("Выручка", `${formatCompact(stats.rubRevenue || 0)} ₽`, `${formatCompact(stats.starsRevenue || 0)} Stars · ${formatCompact(stats.usdRevenue || 0)} USDT`, "wallet")}
-            ${adminKpi("AI-активность", stats.analyses || 0, `avg score ${stats.avgScore || 0} · meals ${stats.meals || 0}`, "activity")}
+            ${adminKpi("Активность", stats.analyses || 0, `средняя оценка ${stats.avgScore || 0} · питание ${stats.meals || 0}`, "activity")}
         </div>
     </section>
     <section class="section-panel admin-insights">
@@ -561,7 +728,7 @@ function adminProviderRow(item) {
     const percent = pct(paid, Math.max(1, total));
     return `<div class="admin-provider-row">
         <div>
-            <strong>${escapeHtml(item.provider)}</strong>
+            <strong>${escapeHtml(providerLabel(item.provider))}</strong>
             <small>${paid}/${total} оплачено · ${percent}%</small>
         </div>
         <div class="admin-provider-money">${formatCompact(item.rubRevenue || 0)} ₽<span>${formatCompact(item.starsRevenue || 0)} Stars · ${formatCompact(item.usdRevenue || 0)} USDT</span></div>
@@ -584,7 +751,7 @@ function adminStatusPulse(item) {
     const totalPayments = Math.max(1, Number(state.admin?.stats?.payments || 1));
     const percent = pct(item.total || 0, totalPayments);
     return `<div class="admin-pulse-row">
-        <span>${escapeHtml(item.status)}</span>
+        <span>${escapeHtml(statusLabel(item.status))}</span>
         <strong>${item.total}</strong>
         <div class="track"><span class="fill" style="width:${percent}%"></span></div>
     </div>`;
@@ -611,7 +778,7 @@ function adminPlanEditor(plan) {
 }
 
 function adminPaymentItem(item) {
-    return `<div class="zone-card admin-feed-item"><strong>${escapeHtml(item.provider)} · ${escapeHtml(item.planCode)}<em>${escapeHtml(item.status)}</em></strong><p class="muted">${item.telegramId} · ${escapeHtml(item.amount)} ${escapeHtml(item.currency)} · ${formatDate(item.createdAt)}</p></div>`;
+    return `<div class="zone-card admin-feed-item"><strong>${escapeHtml(providerLabel(item.provider))} · ${escapeHtml(planTitle(item.planCode))}<em>${escapeHtml(statusLabel(item.status))}</em></strong><p class="muted">${item.telegramId} · ${escapeHtml(item.amount)} ${escapeHtml(item.currency)} · ${formatDate(item.createdAt)}</p></div>`;
 }
 
 function adminUserItem(item) {
@@ -624,6 +791,28 @@ function adminAnalysisItem(item) {
 
 function emptyAdmin(text) {
     return `<div class="admin-empty">${escapeHtml(text)}</div>`;
+}
+
+function providerLabel(provider) {
+    return {
+        telegram_stars: "Telegram Stars",
+        crypto_pay: "Криптовалюта",
+        card: "Карта",
+        yookassa: "Карта"
+    }[provider] || provider || "Оплата";
+}
+
+function statusLabel(status) {
+    return {
+        PENDING: "ожидает",
+        PAID: "оплачено",
+        CANCELLED: "отменено",
+        FAILED: "ошибка"
+    }[status] || status || "статус";
+}
+
+function planTitle(code) {
+    return state.boot?.plans?.find(plan => plan.code === code)?.title || code || "Тариф";
 }
 
 function metric(name, value, hint = "") {
@@ -650,12 +839,13 @@ function planCard(plan) {
 function uploadTile(kind, title, subtitle) {
     const file = state.files[kind];
     const preview = state.previews[kind];
-    return `<label class="upload-tile ${file ? "has-file" : ""}">
+    const hasImage = Boolean(file || preview);
+    return `<label class="upload-tile ${hasImage ? "has-file" : ""}">
         ${preview ? `<img class="upload-preview" src="${preview}" alt="">` : ""}
         <input type="file" accept="image/png,image/jpeg" data-file="${kind}">
         <span class="upload-content">
             <span class="upload-icon"><i data-lucide="${kind === "front" ? "camera" : "scan"}"></i></span>
-            <h3>${file ? escapeHtml(file.name) : title}</h3>
+            <h3>${file ? escapeHtml(file.name) : preview ? "Фото загружено" : title}</h3>
             <small class="muted">${subtitle}</small>
         </span>
     </label>`;
@@ -680,12 +870,14 @@ function bindView() {
     document.querySelectorAll("[data-file]").forEach(input => input.addEventListener("change", event => {
         const kind = input.dataset.file;
         const file = event.target.files[0] || null;
-        if (state.previews[kind]) {
-            URL.revokeObjectURL(state.previews[kind]);
-        }
+        revokePreview(state.previews[kind]);
         state.files[kind] = file;
         state.previews[kind] = file ? URL.createObjectURL(file) : null;
+        if (!file) localStorage.removeItem(storageKey(`preview-${kind}`));
         render();
+        if (file) {
+            persistPreview(kind, file);
+        }
     }));
     document.querySelectorAll("[data-chat-chip]").forEach(button => button.addEventListener("click", () => sendChat(button.dataset.chatChip)));
     document.querySelector("#chatForm")?.addEventListener("submit", event => {
@@ -700,6 +892,26 @@ function bindView() {
         state.mealType = button.dataset.value;
         render();
     });
+    document.querySelectorAll("[data-plan-day]").forEach(button => button.addEventListener("click", () => {
+        state.selectedPlanDay = Math.max(1, Math.min(60, Number(button.dataset.planDay) || 1));
+        savePlanReports();
+        render();
+    }));
+    document.querySelectorAll("[data-plan-task]").forEach(input => input.addEventListener("change", () => {
+        togglePlanTask(Number(input.dataset.planTask), input.checked);
+    }));
+    document.querySelectorAll("[data-plan-mood]").forEach(button => button.addEventListener("click", () => {
+        const report = planReport(selectedPlanDay());
+        report.mood = button.dataset.planMood;
+        savePlanReports();
+        render();
+    }));
+    document.querySelectorAll("[data-battle-opponent]").forEach(button => button.addEventListener("click", () => {
+        state.battleOpponent = button.dataset.battleOpponent;
+        state.battleResult = null;
+        saveBattleState();
+        render();
+    }));
 }
 
 async function handleAction(event) {
@@ -728,6 +940,12 @@ async function handleAction(event) {
     }
     if (action === "add-meal") {
         await addMeal();
+    }
+    if (action === "save-plan-report") {
+        savePlanReport();
+    }
+    if (action === "run-battle") {
+        await runBattle();
     }
     if (action === "add-admin") {
         await addAdmin();
@@ -793,6 +1011,7 @@ function renderNav() {
 }
 
 async function runAnalysis() {
+    if (state.busy.analysis) return;
     const form = new FormData();
     if (state.files.front) form.append("front", state.files.front);
     if (state.files.side) form.append("side", state.files.side);
@@ -801,6 +1020,8 @@ async function runAnalysis() {
         return;
     }
     try {
+        state.busy.analysis = true;
+        render();
         toast("Сканирую фото...");
         const response = await fetch(apiPath("/api/analysis"), {
             method: "POST",
@@ -810,20 +1031,30 @@ async function runAnalysis() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Не удалось провести анализ");
         state.analysis = data;
+        saveAnalysis();
         render();
         toast("Анализ готов.");
     } catch (error) {
         toast(error.message);
+    } finally {
+        state.busy.analysis = false;
+        render();
     }
 }
 
 async function sendChat(text) {
+    if (state.busy.chat) return;
     const message = (text || "").trim();
     if (!message) return;
+    const history = chatHistoryForAi();
     state.chat.push({ role: "user", text: message });
-    const assistant = { role: "assistant", text: "" };
+    const assistant = { role: "assistant", text: "", pending: true };
     state.chat.push(assistant);
+    state.busy.chat = true;
+    saveChatHistory();
     render();
+    scrollChatToBottom();
+    const typer = createTypingRenderer(assistant);
     try {
         const response = await fetch(apiPath("/api/chat/stream"), {
             method: "POST",
@@ -831,20 +1062,26 @@ async function sendChat(text) {
                 "Content-Type": "application/json",
                 "X-Telegram-Init-Data": tg?.initData || ""
             },
-            body: JSON.stringify({ message })
+            body: JSON.stringify({ message, history })
         });
         if (!response.ok || !response.body) {
             const error = await response.json().catch(() => ({ message: "Ошибка чата" }));
             throw new Error(error.message);
         }
         await readSse(response, delta => {
-            assistant.text += delta;
-            render();
-            const list = document.querySelector("#chatList");
-            if (list) list.scrollTop = list.scrollHeight;
+            typer.push(delta);
         });
+        await typer.waitForIdle();
     } catch (error) {
+        assistant.pending = false;
         assistant.text = error.message;
+        saveChatHistory();
+        render();
+        scrollChatToBottom();
+    } finally {
+        assistant.pending = false;
+        state.busy.chat = false;
+        saveChatHistory();
         render();
     }
 }
@@ -879,6 +1116,7 @@ async function loadNutrition() {
 }
 
 async function addMeal() {
+    if (state.busy.meal) return;
     const input = document.querySelector("#mealInput");
     const text = input?.value?.trim();
     if (!text) {
@@ -886,14 +1124,24 @@ async function addMeal() {
         return;
     }
     try {
-        state.nutrition = await api("/api/nutrition", {
-            method: "POST",
-            body: JSON.stringify({ mealType: state.mealType, text })
-        });
+        state.busy.meal = true;
+        render();
+        toast("Считаю КБЖУ...");
+        const [nutrition] = await Promise.all([
+            api("/api/nutrition", {
+                method: "POST",
+                body: JSON.stringify({ mealType: state.mealType, text })
+            }),
+            delay(420)
+        ]);
+        state.nutrition = nutrition;
         render();
         toast("Добавлено в дневник.");
     } catch (error) {
         toast(error.message);
+    } finally {
+        state.busy.meal = false;
+        render();
     }
 }
 
@@ -974,15 +1222,15 @@ async function saveAdminPlan(code) {
 async function copyAdminSnapshot() {
     const stats = state.admin?.stats || {};
     const text = [
-        "BodyLab admin snapshot",
-        `Users: ${stats.users || 0}`,
-        `Active Pro: ${stats.activeSubscriptions || 0}`,
-        `Paid payments: ${stats.paidPayments || 0}`,
-        `Revenue RUB: ${stats.rubRevenue || 0}`,
-        `Revenue Stars: ${stats.starsRevenue || 0}`,
-        `Revenue USDT: ${stats.usdRevenue || 0}`,
-        `Analyses: ${stats.analyses || 0}`,
-        `Meals: ${stats.meals || 0}`
+        "Сводка BodyLab",
+        `Пользователи: ${stats.users || 0}`,
+        `Активные Pro: ${stats.activeSubscriptions || 0}`,
+        `Оплаченные платежи: ${stats.paidPayments || 0}`,
+        `Выручка ₽: ${stats.rubRevenue || 0}`,
+        `Выручка Stars: ${stats.starsRevenue || 0}`,
+        `Выручка USDT: ${stats.usdRevenue || 0}`,
+        `Анализы: ${stats.analyses || 0}`,
+        `Питание: ${stats.meals || 0}`
     ].join("\n");
     try {
         await navigator.clipboard.writeText(text);
@@ -995,20 +1243,23 @@ async function copyAdminSnapshot() {
 function openPayment() {
     const plan = selectedPlan();
     document.querySelector("#paymentTitle").textContent = plan.title;
-    document.querySelector("#paymentSubtitle").textContent = `${plan.subtitle}. ${plan.rub} ₽ · ${plan.stars} Stars · ${plan.usd} USDT`;
+    document.querySelector("#paymentSubtitle").textContent = "Выбери удобный способ. Доступ откроется автоматически после оплаты.";
     document.querySelector("#paymentPlanSummary").innerHTML = `<button class="plan-card selected"><span><strong>${plan.title}</strong><small>${plan.subtitle}</small></span><span class="price">${plan.rub} ₽</span></button>`;
     const config = state.boot.payments;
-    document.querySelector("[data-provider='stars']").disabled = !config.telegramStars;
-    document.querySelector("[data-provider='crypto']").disabled = !config.cryptoPay;
-    document.querySelector("[data-provider='card']").disabled = !config.card;
+    document.querySelector("[data-provider='stars']").disabled = state.busy.payment || !config.telegramStars;
+    document.querySelector("[data-provider='crypto']").disabled = state.busy.payment || !config.cryptoPay;
+    document.querySelector("[data-provider='card']").disabled = state.busy.payment || !config.card;
     document.querySelector("#demoActivateButton").style.display = config.demoMode ? "inline-flex" : "none";
     openModal("paymentModal");
 }
 
 async function pay(provider) {
+    if (state.busy.payment) return;
     const endpoint = { stars: "stars", crypto: "crypto", card: "card" }[provider];
     const plan = selectedPlan();
     try {
+        setPaymentBusy(true);
+        toast("Готовлю оплату...");
         const link = await api(`/api/payments/${endpoint}`, {
             method: "POST",
             body: JSON.stringify({ planCode: plan.code })
@@ -1018,18 +1269,23 @@ async function pay(provider) {
                 if (status === "paid") {
                     waitForPaymentActivation(link.paymentId, plan);
                 } else {
+                    setPaymentBusy(false);
                     toast("Счёт закрыт: " + status);
                     bootstrap();
                 }
             });
         } else if (link.action === "open_telegram_link" && tg?.openTelegramLink) {
             tg.openTelegramLink(link.url);
+            setPaymentBusy(false);
         } else if (tg?.openLink) {
             tg.openLink(link.url);
+            setPaymentBusy(false);
         } else {
             window.open(link.url, "_blank", "noopener");
+            setPaymentBusy(false);
         }
     } catch (error) {
+        setPaymentBusy(false);
         toast(error.message);
     }
 }
@@ -1042,11 +1298,7 @@ async function waitForPaymentActivation(paymentId, plan) {
             const status = await api(`/api/payments/${paymentId}/status`, { method: "GET" });
             state.boot = await api("/api/bootstrap", { method: "GET" });
             if (status.subscriptionActive || state.boot.subscription?.active) {
-                state.accessNotice = accessNoticeText(plan);
-                closeModals();
-                state.view = "dashboard";
-                renderNav();
-                render();
+                showAccessUnlocked(plan);
                 toast("BodyPro активирован.");
                 return;
             }
@@ -1054,11 +1306,7 @@ async function waitForPaymentActivation(paymentId, plan) {
             try {
                 state.boot = await api("/api/bootstrap", { method: "GET" });
                 if (state.boot.subscription?.active) {
-                    state.accessNotice = accessNoticeText(plan);
-                    closeModals();
-                    state.view = "dashboard";
-                    renderNav();
-                    render();
+                    showAccessUnlocked(plan);
                     toast("BodyPro активирован.");
                     return;
                 }
@@ -1066,23 +1314,59 @@ async function waitForPaymentActivation(paymentId, plan) {
         }
     }
     await bootstrap();
+    setPaymentBusy(false);
     toast("Оплата принята. Если доступ не появился, открой мини-апп заново через 10 секунд.");
+}
+
+function setPaymentBusy(busy) {
+    state.busy.payment = busy;
+    const config = state.boot?.payments || {};
+    const enabled = {
+        stars: Boolean(config.telegramStars),
+        crypto: Boolean(config.cryptoPay),
+        card: Boolean(config.card)
+    };
+    document.querySelectorAll("[data-provider]").forEach(button => {
+        button.disabled = busy || !enabled[button.dataset.provider];
+    });
+    const subtitle = document.querySelector("#paymentSubtitle");
+    if (!subtitle) return;
+    subtitle.textContent = busy
+        ? "Ожидаю подтверждение оплаты..."
+        : "Выбери удобный способ. Доступ откроется автоматически после оплаты.";
 }
 
 function showReturnPaymentNotice() {
     const paymentId = new URLSearchParams(window.location.search).get("payment");
-    if (!paymentId || !state.boot?.subscription?.active) return;
+    if (!paymentId || !state.boot?.subscription?.active) return null;
     const key = `bodylab:payment-notice:${paymentId}`;
-    if (sessionStorage.getItem(key)) return;
+    if (sessionStorage.getItem(key)) return null;
     const plan = state.boot.plans.find(item => item.code === state.boot.subscription.planCode) || selectedPlan();
     state.accessNotice = accessNoticeText(plan);
     state.view = "dashboard";
     sessionStorage.setItem(key, "1");
     window.history.replaceState(null, "", window.location.pathname);
+    return plan;
 }
 
 function accessNoticeText(plan) {
     return `${plan.title}: открыты анализ лица, BodyGPT, питание, персональный план, академия и MogBattle.`;
+}
+
+function showAccessUnlocked(plan) {
+    state.busy.payment = false;
+    state.accessNotice = accessNoticeText(plan);
+    closeModals();
+    state.view = "dashboard";
+    renderNav();
+    render();
+    openAccessModal(plan);
+}
+
+function openAccessModal(plan) {
+    document.querySelector("#accessTitle").textContent = "BodyPro активирован";
+    document.querySelector("#accessSubtitle").textContent = accessNoticeText(plan);
+    openModal("accessModal");
 }
 
 function delay(ms) {
@@ -1090,21 +1374,322 @@ function delay(ms) {
 }
 
 async function activateDemo() {
+    const plan = selectedPlan();
     try {
         await api("/api/payments/demo/activate", {
             method: "POST",
-            body: JSON.stringify({ planCode: selectedPlan().code })
+            body: JSON.stringify({ planCode: plan.code })
         });
         closeModals();
         await bootstrap();
-        state.accessNotice = "Открыты анализ лица, BodyGPT, питание, персональный план, академия и MogBattle.";
-        state.view = "dashboard";
-        renderNav();
-        render();
+        showAccessUnlocked(plan);
         toast("Демо-доступ активирован.");
     } catch (error) {
         toast(error.message);
     }
+}
+
+function buttonContent(label, busyLabel, icon, busy) {
+    return busy ? `<span class="mini-loader"></span>${busyLabel}` : `<i data-lucide="${icon}"></i>${label}`;
+}
+
+function storageKey(name) {
+    return `bodylab:${name}:${state.boot?.user?.telegramId || "guest"}`;
+}
+
+function loadLocalState() {
+    state.chat = readJson(storageKey("chat"), []);
+    state.planReports = readJson(storageKey("plan-reports"), {});
+    state.analysis = readJson(storageKey("analysis"), null);
+    state.previews.front = localStorage.getItem(storageKey("preview-front")) || null;
+    state.previews.side = localStorage.getItem(storageKey("preview-side")) || null;
+    const planMeta = readJson(storageKey("plan-meta"), {});
+    state.selectedPlanDay = Number(planMeta.selectedDay || defaultPlanDay());
+    const battle = readJson(storageKey("battle"), {});
+    state.battleOpponent = battleOpponents.some(item => item.id === battle.opponent) ? battle.opponent : state.battleOpponent;
+    const battleNames = new Set(battleOpponents.map(item => item.name));
+    state.battleHistory = Array.isArray(battle.history) ? battle.history.filter(item => battleNames.has(item.name)).slice(0, 20) : [];
+}
+
+function readJson(key, fallback) {
+    try {
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value) : fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function revokePreview(url) {
+    if (url?.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+    }
+}
+
+async function persistPreview(kind, file) {
+    try {
+        const dataUrl = await createPreviewDataUrl(file);
+        if (state.files[kind] !== file) return;
+        revokePreview(state.previews[kind]);
+        state.previews[kind] = dataUrl;
+        localStorage.setItem(storageKey(`preview-${kind}`), dataUrl);
+        render();
+    } catch (_) {
+        // The object URL preview still works for the current session.
+    }
+}
+
+function createPreviewDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => {
+            const image = new Image();
+            image.onerror = reject;
+            image.onload = () => {
+                const maxSide = 900;
+                const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.max(1, Math.round(image.width * scale));
+                canvas.height = Math.max(1, Math.round(image.height * scale));
+                const context = canvas.getContext("2d");
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL("image/jpeg", 0.82));
+            };
+            image.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function saveChatHistory() {
+    if (!state.boot?.user) return;
+    const compact = state.chat
+        .filter(message => message.text && !message.pending)
+        .slice(-MAX_CHAT_MESSAGES)
+        .map(message => ({ role: message.role, text: cleanAssistantText(message.text).slice(0, 1600) }));
+    localStorage.setItem(storageKey("chat"), JSON.stringify(compact));
+}
+
+function saveAnalysis() {
+    if (!state.boot?.user || !state.analysis) return;
+    localStorage.setItem(storageKey("analysis"), JSON.stringify(state.analysis));
+}
+
+function chatHistoryForAi() {
+    return state.chat
+        .filter(message => message.text && !message.pending)
+        .slice(-CHAT_CONTEXT_MESSAGES)
+        .map(message => ({ role: message.role, text: cleanAssistantText(message.text).slice(0, 700) }));
+}
+
+function savePlanReports() {
+    if (!state.boot?.user) return;
+    localStorage.setItem(storageKey("plan-reports"), JSON.stringify(state.planReports));
+    localStorage.setItem(storageKey("plan-meta"), JSON.stringify({ selectedDay: selectedPlanDay() }));
+}
+
+function defaultPlanDay() {
+    const subscription = state.boot?.subscription;
+    const plan = state.boot?.plans?.find(item => item.code === subscription?.planCode);
+    if (!subscription?.active || !plan?.days) return 1;
+    return Math.max(1, Math.min(60, plan.days - Number(subscription.daysLeft || plan.days) + 1));
+}
+
+function selectedPlanDay() {
+    if (!state.selectedPlanDay) state.selectedPlanDay = defaultPlanDay();
+    return Math.max(1, Math.min(60, Number(state.selectedPlanDay) || 1));
+}
+
+function planPhase(day) {
+    return planPhases.find(phase => day >= phase.from && day <= phase.to) || planPhases[0];
+}
+
+function planReport(day) {
+    const key = String(day);
+    const phase = planPhase(day);
+    if (!state.planReports[key]) {
+        state.planReports[key] = {
+            tasks: Array(phase.tasks.length).fill(false),
+            mood: "",
+            note: "",
+            completion: 0,
+            updatedAt: ""
+        };
+    }
+    if (state.planReports[key].tasks.length !== phase.tasks.length) {
+        state.planReports[key].tasks = phase.tasks.map((_, index) => Boolean(state.planReports[key].tasks[index]));
+    }
+    return state.planReports[key];
+}
+
+function togglePlanTask(index, checked) {
+    const day = selectedPlanDay();
+    const report = planReport(day);
+    report.tasks[index] = checked;
+    report.completion = report.tasks.filter(Boolean).length / report.tasks.length;
+    report.updatedAt = new Date().toISOString();
+    savePlanReports();
+    render();
+}
+
+function savePlanReport() {
+    const day = selectedPlanDay();
+    const report = planReport(day);
+    report.note = document.querySelector("#planNote")?.value?.trim() || "";
+    report.completion = report.tasks.filter(Boolean).length / report.tasks.length;
+    report.updatedAt = new Date().toISOString();
+    savePlanReports();
+    render();
+    toast("Отчёт дня сохранён.");
+}
+
+function renderPlanReportList() {
+    const reports = Object.entries(state.planReports)
+        .filter(([, report]) => report.updatedAt)
+        .sort((a, b) => Number(b[0]) - Number(a[0]))
+        .slice(0, 6);
+    if (!reports.length) {
+        return `<div class="admin-empty">Пока нет сохранённых отчётов. Отметь задачи дня и нажми “Сохранить отчёт дня”.</div>`;
+    }
+    return reports.map(([day, report]) => `<div class="zone-card report-card">
+        <strong>День ${day}<em>${Math.round((report.completion || 0) * 100)}%</em></strong>
+        <p class="muted">${escapeHtml(report.mood ? `${report.mood}. ` : "")}${escapeHtml(report.note || "Заметка не добавлена.")}</p>
+    </div>`).join("");
+}
+
+function selectedBattleOpponent() {
+    const opponent = battleOpponents.find(item => item.id === state.battleOpponent);
+    if (opponent) return opponent;
+    state.battleOpponent = battleOpponents[0].id;
+    return battleOpponents[0];
+}
+
+function battleOwnScore() {
+    if (state.analysis?.score) return Math.max(1, Math.min(100, Number(state.analysis.score)));
+    if (state.files.front || state.previews.front) return 68;
+    return 0;
+}
+
+async function runBattle() {
+    if (state.busy.battle) return;
+    const ownScore = battleOwnScore();
+    if (!ownScore) {
+        toast("Сначала загрузи фото или сделай анализ лица.");
+        return;
+    }
+    state.busy.battle = true;
+    render();
+    await delay(720);
+    const opponent = selectedBattleOpponent();
+    const swing = Math.round((Math.random() - 0.5) * 8);
+    const finalOwn = Math.max(1, Math.min(100, ownScore + swing));
+    const delta = finalOwn - opponent.score;
+    const result = Math.abs(delta) <= 3 ? "tie" : delta > 0 ? "win" : "lose";
+    const eloDelta = result === "win" ? 18 : result === "tie" ? 4 : -12;
+    state.battleResult = {
+        result,
+        name: opponent.name,
+        ownScore: finalOwn,
+        opponentScore: opponent.score,
+        eloDelta,
+        advice: battleAdvice(result, delta)
+    };
+    state.battleHistory.unshift({ ...state.battleResult, createdAt: new Date().toISOString() });
+    state.battleHistory = state.battleHistory.slice(0, 20);
+    state.busy.battle = false;
+    saveBattleState();
+    render();
+    toast(result === "win" ? "Победа в баттле." : result === "tie" ? "Почти ровно." : "Есть что усилить.");
+}
+
+function battleAdvice(result, delta) {
+    if (result === "win") return "Твоя подача сильнее в этом сравнении. Закрепи преимущество свежим фото и чистым контуром.";
+    if (result === "tie") return "Профили близки. Решать будут свет, выражение лица, стрижка и качество фото.";
+    return `Разрыв ${Math.abs(delta)} пунктов. Быстрый фокус: свет, кожа, контур волос и более собранный образ.`;
+}
+
+function saveBattleState() {
+    if (!state.boot?.user) return;
+    localStorage.setItem(storageKey("battle"), JSON.stringify({
+        opponent: state.battleOpponent,
+        history: state.battleHistory
+    }));
+}
+
+function chatMessageHtml(message) {
+    const text = escapeHtml(formatChatText(message.text));
+    const cursor = message.pending && text ? `<span class="typing-cursor"></span>` : "";
+    const dots = message.pending && !text ? `<span class="typing-dots"><i></i><i></i><i></i></span>` : "";
+    return `<div class="chat-message ${message.role} ${message.pending ? "is-pending" : ""}">${text || dots}${cursor}</div>`;
+}
+
+function createTypingRenderer(assistant) {
+    return {
+        queue: "",
+        active: false,
+        lastPaint: 0,
+        idleResolvers: [],
+        push(delta) {
+            const cleanDelta = cleanAssistantText(delta);
+            if (!cleanDelta) return;
+            this.queue += cleanDelta;
+            this.run();
+        },
+        async run() {
+            if (this.active) return;
+            this.active = true;
+            while (this.queue.length) {
+                const char = this.queue[0];
+                this.queue = this.queue.slice(1);
+                assistant.pending = true;
+                assistant.text = cleanAssistantText(assistant.text + char);
+                if (Date.now() - this.lastPaint > CHAT_RENDER_INTERVAL || /[\n.!?;:]$/.test(char)) {
+                    this.paint();
+                }
+                await delay(chatCharDelay(char));
+            }
+            this.paint();
+            this.active = false;
+            this.resolveIdle();
+        },
+        paint() {
+            this.lastPaint = Date.now();
+            saveChatHistory();
+            render();
+            scrollChatToBottom();
+        },
+        waitForIdle() {
+            if (!this.active && !this.queue.length) return Promise.resolve();
+            return new Promise(resolve => this.idleResolvers.push(resolve));
+        },
+        resolveIdle() {
+            this.idleResolvers.splice(0).forEach(resolve => resolve());
+        }
+    };
+}
+
+function chatCharDelay(char) {
+    if (char === "\n") return CHAT_PUNCTUATION_DELAY;
+    if (/[.!?]/.test(char)) return CHAT_PUNCTUATION_DELAY;
+    if (/[,;:]/.test(char)) return Math.round(CHAT_PUNCTUATION_DELAY * 0.65);
+    return CHAT_TYPE_DELAY + Math.round(Math.random() * 12);
+}
+
+function scrollChatToBottom() {
+    const list = document.querySelector("#chatList");
+    if (list) list.scrollTop = list.scrollHeight;
+}
+
+function cleanAssistantText(text) {
+    return String(text || "")
+        .replace(/\*\*/g, "")
+        .replace(/^\s*\*\s+/gm, "- ")
+        .replace(/\*/g, "");
+}
+
+function formatChatText(text) {
+    return cleanAssistantText(text);
 }
 
 function selectedPlan() {
@@ -1160,6 +1745,9 @@ function bindGlobal() {
         const method = event.target.closest("[data-provider]");
         if (method && !method.disabled) pay(method.dataset.provider);
         if (event.target.id === "paymentModal") closeModals();
+    });
+    document.querySelector("#accessModal").addEventListener("click", event => {
+        if (event.target.id === "accessModal") closeModals();
     });
     document.querySelector("#settingsModal").addEventListener("click", event => {
         const button = event.target.closest(".segmented button[data-value]");
