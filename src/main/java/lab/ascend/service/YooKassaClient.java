@@ -39,7 +39,7 @@ public class YooKassaClient {
                 "type", "redirect",
                 "return_url", properties.miniAppUrl() + "?payment=" + paymentId
         ));
-        body.put("description", trimDescription("AscendLab - " + plan.title()));
+        body.put("description", trimDescription("BodyLab - " + plan.title()));
         body.put("metadata", Map.of(
                 "paymentId", paymentId,
                 "telegramId", String.valueOf(telegramId),

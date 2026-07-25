@@ -8,6 +8,7 @@ import lab.ascend.service.CryptoPayClient;
 import lab.ascend.service.CurrentUserService;
 import lab.ascend.service.PaymentService;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -64,6 +65,13 @@ public class PaymentController {
         UserProfile user = currentUser.require(initData);
         payments.activateDemo(user.telegramId(), request.planCode());
         return Map.of("ok", true);
+    }
+
+    @GetMapping("/{paymentId}/status")
+    public PaymentService.PaymentState status(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData,
+                                              @PathVariable String paymentId) {
+        UserProfile user = currentUser.require(initData);
+        return payments.status(user.telegramId(), paymentId);
     }
 
     @PostMapping("/crypto/webhook/{secret}")

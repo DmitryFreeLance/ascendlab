@@ -133,6 +133,14 @@ public class PaymentService {
         subscriptions.activate(telegramId, plan, "demo", "demo");
     }
 
+    public PaymentState status(long telegramId, String paymentId) {
+        PaymentRepository.PaymentRecord local = payments.findRequired(paymentId);
+        if (local.telegramId() != telegramId) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return new PaymentState(paymentId, local.provider(), local.status(), subscriptions.isActive(telegramId));
+    }
+
     public Map<String, Object> paymentConfig() {
         return Map.of(
                 "telegramStars", properties.telegram().configured(),
@@ -148,5 +156,8 @@ public class PaymentService {
     }
 
     public record PaymentLink(String paymentId, String provider, String url, String action) {
+    }
+
+    public record PaymentState(String paymentId, String provider, String status, boolean subscriptionActive) {
     }
 }

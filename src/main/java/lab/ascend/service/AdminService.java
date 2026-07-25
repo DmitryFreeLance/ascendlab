@@ -17,11 +17,16 @@ public class AdminService implements ApplicationRunner {
     private final AppProperties properties;
     private final AdminRepository admins;
     private final PlanCatalogService plans;
+    private final SubscriptionService subscriptions;
 
-    public AdminService(AppProperties properties, AdminRepository admins, PlanCatalogService plans) {
+    public AdminService(AppProperties properties,
+                        AdminRepository admins,
+                        PlanCatalogService plans,
+                        SubscriptionService subscriptions) {
         this.properties = properties;
         this.admins = admins;
         this.plans = plans;
+        this.subscriptions = subscriptions;
     }
 
     @Override
@@ -59,6 +64,18 @@ public class AdminService implements ApplicationRunner {
                 "recentAnalyses", admins.recentAnalyses(),
                 "recentPayments", admins.recentPayments(),
                 "recentUsers", admins.recentUsers()
+        );
+    }
+
+    public Map<String, Object> grantSubscription(long actorTelegramId, long targetTelegramId, String planCode) {
+        requireAdmin(actorTelegramId);
+        var plan = plans.get(planCode);
+        subscriptions.activate(targetTelegramId, plan, "admin", "admin:" + actorTelegramId);
+        return Map.of(
+                "ok", true,
+                "telegramId", targetTelegramId,
+                "plan", plan,
+                "subscription", subscriptions.status(targetTelegramId)
         );
     }
 

@@ -30,7 +30,7 @@ public class PaymentRepository {
                         SET external_id = ?, url = ?, payload = ?, updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                         """,
-                externalId, url, payload, paymentId);
+                fitExternalId(externalId), url, payload, paymentId);
     }
 
     public void markStatus(String paymentId, PaymentStatus status, String externalId, String payload) {
@@ -39,7 +39,7 @@ public class PaymentRepository {
                         SET status = ?, external_id = COALESCE(?, external_id), payload = COALESCE(?, payload), updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                         """,
-                status.name(), externalId, payload, paymentId);
+                status.name(), fitExternalId(externalId), payload, paymentId);
     }
 
     public PaymentRecord findRequired(String paymentId) {
@@ -57,5 +57,12 @@ public class PaymentRepository {
     }
 
     public record PaymentRecord(String id, long telegramId, String planCode, String provider, String status) {
+    }
+
+    private static String fitExternalId(String value) {
+        if (value == null || value.length() <= 1024) {
+            return value;
+        }
+        return value.substring(0, 1024);
     }
 }

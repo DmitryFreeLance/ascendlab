@@ -31,13 +31,15 @@ CREATE TABLE IF NOT EXISTS payments (
     provider VARCHAR(32) NOT NULL,
     amount VARCHAR(64) NOT NULL,
     currency VARCHAR(16) NOT NULL,
-    external_id VARCHAR(128),
+    external_id VARCHAR(1024),
     status VARCHAR(32) NOT NULL,
     url VARCHAR(2048),
     payload CLOB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE payments ALTER COLUMN external_id VARCHAR(1024);
 
 CREATE TABLE IF NOT EXISTS analysis_reports (
     id VARCHAR(64) PRIMARY KEY,

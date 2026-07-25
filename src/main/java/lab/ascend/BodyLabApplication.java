@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 @SpringBootApplication
 @EnableConfigurationProperties(AppProperties.class)
-public class AscendLabApplication {
+public class BodyLabApplication {
     public static void main(String[] args) {
-        SpringApplication.run(AscendLabApplication.class, args);
+        SpringApplication.run(BodyLabApplication.class, args);
     }
 }

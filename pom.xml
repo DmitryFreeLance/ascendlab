@@ -14,8 +14,8 @@
     <groupId>lab.ascend</groupId>
     <artifactId>ascendlab</artifactId>
     <version>1.0.0</version>
-    <name>AscendLab</name>
-    <description>Telegram bot and futuristic Mini App for AscendLab</description>
+    <name>BodyLab</name>
+    <description>Telegram bot and futuristic Mini App for BodyLab</description>
 
     <properties>
         <java.version>21</java.version>

@@ -37,7 +37,7 @@ public class CryptoPayClient {
         body.put("fiat", "RUB");
         body.put("accepted_assets", "USDT,TON,BTC,ETH,USDC");
         body.put("amount", String.valueOf(plan.rub()));
-        body.put("description", "AscendLab - " + plan.title());
+        body.put("description", "BodyLab - " + plan.title());
         body.put("payload", paymentId + ":" + telegramId + ":" + plan.code());
         body.put("allow_comments", false);
         body.put("allow_anonymous", false);

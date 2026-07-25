@@ -29,7 +29,7 @@ public class AiService {
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
 
     private static final String FREE_MESSAGE = """
-            AscendGPT доступен в AscendPro. Я уже готов разобрать лицо, уход, питание и план на 60 дней. Оформи доступ, и я начну с конкретного персонального шага.
+            BodyGPT доступен в BodyPro. Я уже готов разобрать лицо, уход, питание и план на 60 дней. Оформи доступ, и я начну с конкретного персонального шага.
             """.trim();
 
     private final AppProperties properties;
@@ -100,7 +100,7 @@ public class AiService {
         List<Map<String, Object>> content = new ArrayList<>();
         content.add(Map.of("type", "text", "text", """
                 Ты эксперт по внешности, стилю, уходу за кожей и softmaxxing. 
-                Проанализируй фото бережно, без медицинских диагнозов и без утверждений о личности.
+                Проанализируй фото бережно, без медицинских формулировок и без утверждений о личности.
                 Верни строго JSON:
                 {"score":0,"summary":"...","metrics":[{"name":"гармония","value":0,"hint":"..."}],
                 "zones":[{"name":"кожа","status":"...","advice":"..."}],
@@ -134,8 +134,8 @@ public class AiService {
                 "temperature", BigDecimal.valueOf(0.72),
                 "messages", List.of(
                         Map.of("role", "system", "content", """
-                                Ты AscendGPT, персональный AI-ассистент AscendLab по внешности, уходу, стилю, питанию и привычкам.
-                                Отвечай по-русски, конкретно, бережно и практично. Не ставь диагнозы, не обещай медицинский эффект.
+                                Ты BodyGPT, персональный AI-ассистент BodyLab по внешности, уходу, стилю, питанию и привычкам.
+                                Отвечай по-русски, конкретно, бережно и практично. Не обещай медицинский эффект.
                                 Давай короткий план действий, если вопрос широкий.
                                 """),
                         Map.of("role", "user", "content", List.of(Map.of(

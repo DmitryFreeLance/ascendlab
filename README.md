@@ -1,8 +1,8 @@
-# AscendLab
+# BodyLab
 
-Java/Spring Boot Telegram bot + Telegram Mini App for AscendLab.
+Java/Spring Boot Telegram bot + Telegram Mini App for BodyLab.
 
-The bot is intentionally minimal: `/start` opens the Mini App, `/paysupport` gives payment support text, and payment webhooks activate access. The Mini App contains the product experience: onboarding, profile, face analysis, AscendGPT, nutrition diary, academy, MogBattle, plans, settings and payments.
+The bot is intentionally minimal: `/start` opens the Mini App, `/paysupport` gives payment support text, and payment webhooks activate access. The Mini App contains the product experience: onboarding, profile, face analysis, BodyGPT, nutrition diary, academy, MogBattle, plans, settings and payments.
 
 ## Stack
 
@@ -188,9 +188,9 @@ Changed plan prices are stored in H2 and immediately affect new Telegram Stars, 
 
 ## Kie.ai Gemini 2.5 Flash
 
-Set `KIE_API_KEY`. AscendGPT uses streaming chat completions. Face analysis and nutrition estimation try Kie.ai when Pro access is active and fall back to local deterministic recommendations if the upstream API is unavailable.
+Set `KIE_API_KEY`. BodyGPT uses streaming chat completions. Face analysis and nutrition estimation try Kie.ai when Pro access is active and fall back to local deterministic recommendations if the upstream API is unavailable.
 
-Without an active subscription, AscendGPT intentionally streams the same access message every time.
+Without an active subscription, BodyGPT intentionally streams the same access message every time.
 
 ## About Payment Compliance
 

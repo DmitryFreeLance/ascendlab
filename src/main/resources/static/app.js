@@ -4,6 +4,8 @@ const APP_BASE_PATH = (() => {
     if (!path || path === "/") return "";
     return path.endsWith("/") ? path.slice(0, -1) : path;
 })();
+const ONBOARDING_KEY = "bodylab:onboarding";
+const LEGACY_ONBOARDING_KEY = "ascendlab:onboarding";
 
 function apiPath(path) {
     return `${APP_BASE_PATH}${path}`;
@@ -15,9 +17,11 @@ const state = {
     selectedPlan: "quarter",
     onboardingStep: 0,
     files: { front: null, side: null },
+    previews: { front: null, side: null },
     analysis: null,
     nutrition: null,
     admin: null,
+    accessNotice: null,
     mealType: "dinner",
     chat: [],
     settings: { gender: "male", age: 25, languageCode: "ru" }
@@ -29,7 +33,7 @@ const nav = [
     ["battle", "MogBattle", "swords"],
     ["analysis", "Анализ лица", "scan-face"],
     ["plan", "Персональный план", "calendar-days"],
-    ["gpt", "AscendGPT", "brain"],
+    ["gpt", "BodyGPT", "brain"],
     ["nutrition", "Питание", "utensils"],
     ["academy", "Академия", "graduation-cap"]
 ];
@@ -40,8 +44,8 @@ const onboarding = [
     {
         eyebrow: "60 дней",
         title: "Красота как система",
-        text: "AscendLab собирает лицо, стиль, уход, питание и привычки в один понятный маршрут.",
-        art: () => `<div class="days-ring"><div><strong>60</strong><span>days to ascend</span></div></div>`
+        text: "BodyLab собирает лицо, стиль, уход, питание и привычки в один понятный маршрут.",
+        art: () => `<div class="days-ring"><div><strong>60</strong><span>дней системы</span></div></div>`
     },
     {
         eyebrow: "Реальность знакомств",
@@ -78,7 +82,7 @@ const onboarding = [
         art: () => `<div class="lab-visual"><div class="scan-face"><span class="face-lines"></span></div></div>`
     },
     {
-        eyebrow: "AscendGPT",
+        eyebrow: "BodyGPT",
         title: "AI превращает оценку в план",
         text: "После анализа ассистент помогает с уходом, питанием, стрижкой, стилем и недельными действиями.",
         art: () => `<div class="story-art"><div class="chat-message assistant">Сначала стабилизируем базу: сон, вода, SPF, стрижка по контуру. Затем усилим стиль и фото.</div></div>`
@@ -127,15 +131,16 @@ async function bootstrap() {
         };
         state.selectedPlan = state.boot.plans.find(plan => plan.code === "quarter")?.code || state.boot.plans[0].code;
         renderNav();
-        const seen = Boolean(state.boot.onboardingSeen || localStorage.getItem("ascendlab:onboarding"));
+        const seen = Boolean(state.boot.onboardingSeen || localStorage.getItem(ONBOARDING_KEY) || localStorage.getItem(LEGACY_ONBOARDING_KEY));
         if (!seen) {
             state.view = "onboarding";
         } else if (!state.boot.onboardingSeen) {
             completeOnboardingRemote();
         }
+        showReturnPaymentNotice();
         render();
     } catch (error) {
-        document.querySelector("#app").innerHTML = `<section class="section-panel"><h2>Не удалось запустить AscendLab</h2><p class="muted">${escapeHtml(error.message)}</p></section>`;
+        document.querySelector("#app").innerHTML = `<section class="section-panel"><h2>Не удалось запустить BodyLab</h2><p class="muted">${escapeHtml(error.message)}</p></section>`;
     }
 }
 
@@ -184,20 +189,21 @@ function renderOnboarding() {
 function renderDashboard() {
     const { user, subscription } = state.boot;
     const active = subscription.active;
-    return `<section class="hero-panel dashboard-hero">
+    return `${state.accessNotice ? renderAccessNotice() : ""}
+    <section class="hero-panel dashboard-hero">
         <div class="signal-board">
             <div class="status-strip">
-                <span class="status-pill ${active ? "active" : ""}"><span class="dot"></span>${active ? "AscendPro активен" : "подписка не активна"}</span>
+                <span class="status-pill ${active ? "active" : ""}"><span class="dot"></span>${active ? "BodyPro активен" : "подписка не активна"}</span>
                 <span class="mini-pill">ID ${user.telegramId}</span>
             </div>
             <div>
                 <p class="eyebrow">Лаборатория внешности</p>
                 <h1>${active ? "Продолжаем прокачку" : "Готов стать заметнее?"}</h1>
-                <p class="muted">${active ? `Осталось ${subscription.daysLeft} дн. доступа. Следующий лучший шаг — обновить анализ и собрать план недели.` : "Начни с анализа лица, затем открой AscendGPT и персональный план на 60 дней."}</p>
+                <p class="muted">${active ? `Осталось ${subscription.daysLeft} дн. доступа. Следующий лучший шаг — обновить анализ и собрать план недели.` : "Начни с анализа лица, затем открой BodyGPT и персональный план на 60 дней."}</p>
             </div>
             <div class="grid two">
                 <button class="button primary" data-view="analysis"><i data-lucide="scan-face"></i>Сделать анализ</button>
-                <button class="button secondary" data-view="gpt"><i data-lucide="brain"></i>AscendGPT</button>
+                <button class="button secondary" data-view="gpt"><i data-lucide="brain"></i>BodyGPT</button>
             </div>
         </div>
         <div class="lab-visual">
@@ -205,7 +211,7 @@ function renderDashboard() {
         </div>
     </section>
     <section class="section-panel">
-        <p class="eyebrow">Пульс Ascend</p>
+        <p class="eyebrow">Пульс BodyLab</p>
         <h2>Система на сегодня</h2>
         ${metric("Кожа", 72)}
         ${metric("Сон", active ? 82 : 41)}
@@ -224,11 +230,22 @@ function renderDashboard() {
     </section>`;
 }
 
+function renderAccessNotice() {
+    return `<section class="section-panel access-notice">
+        <div>
+            <p class="eyebrow">Доступ открыт</p>
+            <h2>BodyPro активирован</h2>
+            <p class="muted">${escapeHtml(state.accessNotice)}</p>
+        </div>
+        <button class="button secondary" data-action="dismiss-access-notice"><i data-lucide="check"></i>Понятно</button>
+    </section>`;
+}
+
 function renderFeatures() {
     return `<section class="section-panel">
         <p class="eyebrow">Все функции</p>
         <h1>14+ инструментов</h1>
-        <p class="muted">Полный список того, что открывается в AscendPro. Раздел вакансий исключён.</p>
+        <p class="muted">Полный список того, что открывается в BodyPro. Раздел вакансий исключён.</p>
         <div class="grid three">${state.boot.features.map(featureCard).join("")}</div>
         <button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Получить доступ</button>
     </section>`;
@@ -239,7 +256,7 @@ function renderAnalysis() {
     return `<section class="section-panel">
         <p class="eyebrow">Анализ лица</p>
         <h1>Скан внешности</h1>
-        <p class="muted">Загрузи фронтальное фото и, по желанию, боковой ракурс. AI не ставит диагнозы — он собирает эстетический план.</p>
+        <p class="muted">Загрузи фронтальное фото и, по желанию, боковой ракурс. BodyLab соберёт эстетический профиль, зоны роста и первые действия.</p>
         <div class="upload-grid">
             ${uploadTile("front", "Анфас", "хорошее освещение")}
             ${uploadTile("side", "Профиль", "по желанию")}
@@ -250,7 +267,7 @@ function renderAnalysis() {
     <section class="section-panel">
         <p class="eyebrow">Персональный план</p>
         <h2>${isPro() ? "Открыт" : "План закрыт"}</h2>
-        <p class="muted">${isPro() ? "После анализа здесь появится 60-дневный маршрут по зонам." : "Персональный план доступен с AscendPro."}</p>
+        <p class="muted">${isPro() ? "После анализа здесь появится 60-дневный маршрут по зонам." : "Персональный план доступен с BodyPro."}</p>
         <button class="button ${isPro() ? "secondary" : "primary"}" data-view="${isPro() ? "plan" : "dashboard"}">${isPro() ? "Открыть план" : "Получить доступ"}</button>
     </section>`;
 }
@@ -258,13 +275,44 @@ function renderAnalysis() {
 function renderAnalysisResult(result) {
     const metrics = result.metrics || [];
     const zones = result.zones || [];
-    return `<section class="section-panel">
-        <p class="eyebrow">Результат</p>
-        <h1>${result.score}<span style="font-size:.38em;color:var(--muted)"> / 100</span></h1>
-        <p class="muted">${escapeHtml(result.summary || "")}</p>
-        ${metrics.map(item => metric(item.name, item.value, item.hint)).join("")}
-        <div class="zone-list">${zones.map(zone => `<div class="zone-card"><strong>${escapeHtml(zone.name)}<em>${escapeHtml(zone.status)}</em></strong><p class="muted">${escapeHtml(zone.advice)}</p></div>`).join("")}</div>
+    const score = Math.max(0, Math.min(100, Number(result.score) || 0));
+    return `<section class="section-panel analysis-result">
+        <div class="analysis-score-card">
+            <div class="score-orbit" style="--score:${score}">
+                <strong>${score}</strong>
+                <span>/100</span>
+            </div>
+            <div>
+                <p class="eyebrow">Результат скана</p>
+                <h1>${score >= 82 ? "Сильная база" : score >= 68 ? "Хороший потенциал" : "Есть быстрые победы"}</h1>
+                <p class="muted">${escapeHtml(result.summary || "")}</p>
+            </div>
+        </div>
+        <div class="analysis-metrics">
+            ${metrics.map(analysisMetric).join("")}
+        </div>
+        ${zones.length ? `<div class="analysis-zone-grid">${zones.map(analysisZone).join("")}</div>` : ""}
     </section>`;
+}
+
+function analysisMetric(item) {
+    const value = Math.max(0, Math.min(100, Number(item.value) || 0));
+    return `<article class="analysis-metric-card">
+        <div class="analysis-metric-head">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${value}%</span>
+        </div>
+        <div class="track"><span class="fill" style="width:${value}%"></span></div>
+        <p class="muted">${escapeHtml(item.hint || "")}</p>
+    </article>`;
+}
+
+function analysisZone(zone) {
+    return `<article class="analysis-zone-card">
+        <span class="badge">${escapeHtml(zone.status || "фокус")}</span>
+        <h3>${escapeHtml(zone.name || "Зона")}</h3>
+        <p class="muted">${escapeHtml(zone.advice || "")}</p>
+    </article>`;
 }
 
 function renderPlan() {
@@ -272,7 +320,7 @@ function renderPlan() {
         return `<section class="hero-panel">
             <p class="eyebrow">План закрыт</p>
             <h1>Персональный план</h1>
-            <p class="muted">После оплаты AscendPro план превращает анализ лица в 60 дней действий: кожа, волосы, стиль, питание, сон, фото.</p>
+            <p class="muted">После оплаты BodyPro план превращает анализ лица в 60 дней действий: кожа, волосы, стиль, питание, сон, фото.</p>
             <button class="button primary" data-action="open-payment"><i data-lucide="lock-keyhole-open"></i>Получить доступ</button>
         </section>`;
     }
@@ -292,12 +340,12 @@ function renderPlan() {
 
 function renderGpt() {
     if (state.chat.length === 0) {
-        state.chat.push({ role: "assistant", text: "Привет. Я AscendGPT — AI-ассистент по внешности. Могу разобрать уход, стрижку, питание, стиль и план на неделю." });
+        state.chat.push({ role: "assistant", text: "Привет. Я BodyGPT — AI-ассистент по внешности. Могу разобрать уход, стрижку, питание, стиль и план на неделю." });
     }
     return `<section class="section-panel chat-window">
         <div class="assistant-head">
             <span class="brand-mark">AI</span>
-            <div><h3>AscendGPT</h3><p class="eyebrow" style="margin:0">на связи</p></div>
+            <div><h3>BodyGPT</h3><p class="eyebrow" style="margin:0">на связи</p></div>
         </div>
         <div class="chat-list" id="chatList">${state.chat.map(message => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`).join("")}</div>
         <div class="chips">${["Отёки", "С чего начать", "Питание", "План на неделю"].map(text => `<button class="chip" data-chat-chip="${text}">${text}</button>`).join("")}</div>
@@ -444,6 +492,18 @@ function renderAdmin() {
         <h2>Редактор цен</h2>
         <div class="admin-plan-list">${(admin.plans || state.boot.plans).map(adminPlanEditor).join("")}</div>
     </section>
+    <section class="section-panel admin-grant-panel">
+        <p class="eyebrow">Поддержка</p>
+        <h2>Выдать BodyPro вручную</h2>
+        <p class="muted">Для компенсации платежа или ручной поддержки: укажи Telegram ID пользователя и тариф.</p>
+        <div class="admin-form">
+            <input class="meal-input" id="grantTelegramId" inputmode="numeric" placeholder="Telegram ID пользователя">
+            <select class="select-input" id="grantPlanCode">
+                ${state.boot.plans.map(plan => `<option value="${plan.code}">${escapeHtml(plan.title)} · ${plan.days} дн.</option>`).join("")}
+            </select>
+            <button class="button primary" data-action="grant-subscription"><i data-lucide="badge-check"></i>Активировать доступ</button>
+        </div>
+    </section>
     <section class="section-panel">
         <p class="eyebrow">Админы</p>
         <h2>Добавить администратора</h2>
@@ -589,9 +649,11 @@ function planCard(plan) {
 
 function uploadTile(kind, title, subtitle) {
     const file = state.files[kind];
+    const preview = state.previews[kind];
     return `<label class="upload-tile ${file ? "has-file" : ""}">
+        ${preview ? `<img class="upload-preview" src="${preview}" alt="">` : ""}
         <input type="file" accept="image/png,image/jpeg" data-file="${kind}">
-        <span>
+        <span class="upload-content">
             <span class="upload-icon"><i data-lucide="${kind === "front" ? "camera" : "scan"}"></i></span>
             <h3>${file ? escapeHtml(file.name) : title}</h3>
             <small class="muted">${subtitle}</small>
@@ -616,7 +678,13 @@ function bindView() {
     }));
     document.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", handleAction));
     document.querySelectorAll("[data-file]").forEach(input => input.addEventListener("change", event => {
-        state.files[input.dataset.file] = event.target.files[0] || null;
+        const kind = input.dataset.file;
+        const file = event.target.files[0] || null;
+        if (state.previews[kind]) {
+            URL.revokeObjectURL(state.previews[kind]);
+        }
+        state.files[kind] = file;
+        state.previews[kind] = file ? URL.createObjectURL(file) : null;
         render();
     }));
     document.querySelectorAll("[data-chat-chip]").forEach(button => button.addEventListener("click", () => sendChat(button.dataset.chatChip)));
@@ -671,13 +739,20 @@ async function handleAction(event) {
         await loadAdmin();
         toast("Админка обновлена.");
     }
+    if (action === "grant-subscription") {
+        await grantSubscription();
+    }
     if (action === "copy-admin-snapshot") {
         await copyAdminSnapshot();
+    }
+    if (action === "dismiss-access-notice") {
+        state.accessNotice = null;
+        render();
     }
 }
 
 function finishOnboarding() {
-    localStorage.setItem("ascendlab:onboarding", "1");
+    localStorage.setItem(ONBOARDING_KEY, "1");
     if (state.boot) state.boot.onboardingSeen = true;
     completeOnboardingRemote();
     setView("dashboard");
@@ -851,6 +926,26 @@ async function addAdmin() {
     }
 }
 
+async function grantSubscription() {
+    const telegramId = Number(document.querySelector("#grantTelegramId")?.value || 0);
+    const planCode = document.querySelector("#grantPlanCode")?.value || "intro";
+    if (!telegramId) {
+        toast("Укажи Telegram ID пользователя.");
+        return;
+    }
+    try {
+        await api("/api/admin/subscriptions/grant", {
+            method: "POST",
+            body: JSON.stringify({ telegramId, planCode })
+        });
+        state.admin = await api("/api/admin", { method: "GET" });
+        render();
+        toast("BodyPro выдан вручную.");
+    } catch (error) {
+        toast(error.message);
+    }
+}
+
 async function saveAdminPlan(code) {
     const root = document.querySelector(`[data-admin-plan="${code}"]`);
     if (!root) return;
@@ -879,7 +974,7 @@ async function saveAdminPlan(code) {
 async function copyAdminSnapshot() {
     const stats = state.admin?.stats || {};
     const text = [
-        "AscendLab admin snapshot",
+        "BodyLab admin snapshot",
         `Users: ${stats.users || 0}`,
         `Active Pro: ${stats.activeSubscriptions || 0}`,
         `Paid payments: ${stats.paidPayments || 0}`,
@@ -920,8 +1015,12 @@ async function pay(provider) {
         });
         if (link.action === "open_invoice" && tg?.openInvoice) {
             tg.openInvoice(link.url, status => {
-                toast(status === "paid" ? "Оплата прошла." : "Счёт закрыт: " + status);
-                bootstrap();
+                if (status === "paid") {
+                    waitForPaymentActivation(link.paymentId, plan);
+                } else {
+                    toast("Счёт закрыт: " + status);
+                    bootstrap();
+                }
             });
         } else if (link.action === "open_telegram_link" && tg?.openTelegramLink) {
             tg.openTelegramLink(link.url);
@@ -935,6 +1034,61 @@ async function pay(provider) {
     }
 }
 
+async function waitForPaymentActivation(paymentId, plan) {
+    toast("Оплата получена. Активирую доступ...");
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+        await delay(attempt < 2 ? 650 : 1000);
+        try {
+            const status = await api(`/api/payments/${paymentId}/status`, { method: "GET" });
+            state.boot = await api("/api/bootstrap", { method: "GET" });
+            if (status.subscriptionActive || state.boot.subscription?.active) {
+                state.accessNotice = accessNoticeText(plan);
+                closeModals();
+                state.view = "dashboard";
+                renderNav();
+                render();
+                toast("BodyPro активирован.");
+                return;
+            }
+        } catch (_) {
+            try {
+                state.boot = await api("/api/bootstrap", { method: "GET" });
+                if (state.boot.subscription?.active) {
+                    state.accessNotice = accessNoticeText(plan);
+                    closeModals();
+                    state.view = "dashboard";
+                    renderNav();
+                    render();
+                    toast("BodyPro активирован.");
+                    return;
+                }
+            } catch (_) {}
+        }
+    }
+    await bootstrap();
+    toast("Оплата принята. Если доступ не появился, открой мини-апп заново через 10 секунд.");
+}
+
+function showReturnPaymentNotice() {
+    const paymentId = new URLSearchParams(window.location.search).get("payment");
+    if (!paymentId || !state.boot?.subscription?.active) return;
+    const key = `bodylab:payment-notice:${paymentId}`;
+    if (sessionStorage.getItem(key)) return;
+    const plan = state.boot.plans.find(item => item.code === state.boot.subscription.planCode) || selectedPlan();
+    state.accessNotice = accessNoticeText(plan);
+    state.view = "dashboard";
+    sessionStorage.setItem(key, "1");
+    window.history.replaceState(null, "", window.location.pathname);
+}
+
+function accessNoticeText(plan) {
+    return `${plan.title}: открыты анализ лица, BodyGPT, питание, персональный план, академия и MogBattle.`;
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function activateDemo() {
     try {
         await api("/api/payments/demo/activate", {
@@ -943,6 +1097,10 @@ async function activateDemo() {
         });
         closeModals();
         await bootstrap();
+        state.accessNotice = "Открыты анализ лица, BodyGPT, питание, персональный план, академия и MogBattle.";
+        state.view = "dashboard";
+        renderNav();
+        render();
         toast("Демо-доступ активирован.");
     } catch (error) {
         toast(error.message);

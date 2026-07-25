@@ -54,9 +54,19 @@ public class AdminController {
         return plans.update(code, request.rub(), request.stars(), request.usd(), request.badge());
     }
 
+    @PostMapping("/subscriptions/grant")
+    public Map<String, Object> grantSubscription(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData,
+                                                @RequestBody GrantSubscriptionRequest request) {
+        UserProfile user = currentUser.require(initData);
+        return admins.grantSubscription(user.telegramId(), request.telegramId(), request.planCode());
+    }
+
     public record AddAdminRequest(long telegramId, String note) {
     }
 
     public record UpdatePlanRequest(int rub, int stars, BigDecimal usd, String badge) {
+    }
+
+    public record GrantSubscriptionRequest(long telegramId, @NotBlank String planCode) {
     }
 }

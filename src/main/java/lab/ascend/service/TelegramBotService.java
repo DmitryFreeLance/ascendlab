@@ -61,8 +61,8 @@ public class TelegramBotService implements ApplicationRunner {
 
     public String createStarsInvoiceLink(long telegramId, PlanOffer plan, String paymentId) {
         Map<String, Object> body = Map.of(
-                "title", "AscendLab - " + plan.title(),
-                "description", "Доступ к AscendPro: анализ лица, AscendGPT, питание, академия и MogBattle.",
+                "title", "BodyLab - " + plan.title(),
+                "description", "Доступ к BodyPro: анализ лица, BodyGPT, питание, академия и MogBattle.",
                 "payload", paymentId + ":" + telegramId + ":" + plan.code(),
                 "provider_token", "",
                 "currency", "XTR",
@@ -108,14 +108,15 @@ public class TelegramBotService implements ApplicationRunner {
         PlanOffer plan = plans.get(parts[2]);
         payments.markStatus(paymentId, PaymentStatus.PAID, payment.path("telegram_payment_charge_id").asText(null), payment.toString());
         subscriptions.activate(telegramId, plan, "telegram_stars", paymentId);
+        log.info("Telegram Stars payment {} activated BodyPro for {}", paymentId, telegramId);
         sendMessage(message.path("chat").path("id").asLong(),
-                "Оплата прошла. AscendPro активирован, мини-апп уже обновит доступ автоматически.");
+                "Оплата прошла. BodyPro активирован: анализ лица, BodyGPT, питание, персональный план и академия уже открыты.");
     }
 
     private void sendStart(long chatId) {
         Map<String, Object> replyMarkup = Map.of("inline_keyboard", List.of(
                 List.of(Map.of(
-                        "text", "Открыть AscendLab",
+                        "text", "Открыть BodyLab",
                         "web_app", Map.of("url", properties.miniAppUrl())
                 )),
                 List.of(Map.of(
@@ -125,7 +126,7 @@ public class TelegramBotService implements ApplicationRunner {
         ));
         Map<String, Object> body = Map.of(
                 "chat_id", chatId,
-                "text", "AscendLab готов. Нажми кнопку ниже, чтобы открыть мини-приложение.",
+                "text", "BodyLab готов. Нажми кнопку ниже, чтобы открыть мини-приложение.",
                 "reply_markup", replyMarkup
         );
         call("sendMessage", body);
@@ -151,7 +152,7 @@ public class TelegramBotService implements ApplicationRunner {
             call("setChatMenuButton", Map.of(
                     "menu_button", Map.of(
                             "type", "web_app",
-                            "text", "AscendLab",
+                            "text", "BodyLab",
                             "web_app", Map.of("url", properties.miniAppUrl())
                     )
             ));

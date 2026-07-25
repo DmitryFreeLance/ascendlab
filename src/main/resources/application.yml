@@ -31,7 +31,7 @@ app:
   admin-telegram-ids: ${ADMIN_TELEGRAM_IDS:}
   telegram:
     bot-token: ${TELEGRAM_BOT_TOKEN:}
-    bot-username: ${TELEGRAM_BOT_USERNAME:AscendLabRobot}
+    bot-username: ${TELEGRAM_BOT_USERNAME:BodyAnalyticLab_bot}
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:dev-secret}
     register-webhook: ${TELEGRAM_REGISTER_WEBHOOK:false}
     long-polling: ${TELEGRAM_LONG_POLLING:false}

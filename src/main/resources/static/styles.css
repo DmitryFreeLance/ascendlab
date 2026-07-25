@@ -168,11 +168,7 @@ body.is-onboarding .app-shell {
 }
 
 .view {
-    animation: enter 360ms ease both;
-}
-
-.view.onboarding-view {
-    animation: none;
+    min-width: 0;
 }
 
 @keyframes enter {
@@ -447,6 +443,22 @@ h3 {
     align-items: center;
     gap: 12px;
     margin: 14px 0;
+}
+
+.access-notice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 190px;
+    align-items: center;
+    gap: 14px;
+    border-color: rgba(100, 224, 176, 0.44);
+    background:
+        radial-gradient(circle at 8% 12%, rgba(100, 224, 176, 0.22), transparent 34%),
+        rgba(255, 255, 255, 0.78);
+}
+
+.access-notice h2,
+.access-notice p {
+    margin-bottom: 0;
 }
 
 .track {
@@ -811,11 +823,158 @@ h3 {
     inset: 0;
     opacity: 0;
     cursor: pointer;
+    z-index: 3;
 }
 
 .upload-tile.has-file {
     border-color: rgba(100, 224, 176, 0.58);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(230, 255, 247, 0.76));
+    background: rgba(23, 32, 42, 0.12);
+}
+
+.upload-preview {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(1.04) contrast(1.02);
+}
+
+.upload-tile.has-file::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(23, 32, 42, 0.12), rgba(23, 32, 42, 0.62)),
+        radial-gradient(circle at 50% 18%, rgba(116, 215, 255, 0.20), transparent 42%);
+    z-index: 1;
+}
+
+.upload-content {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    justify-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 240px;
+    text-align: center;
+}
+
+.upload-content h3,
+.upload-content small {
+    margin: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.upload-tile.has-file .upload-content {
+    align-self: end;
+    max-width: none;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(18px);
+    box-shadow: var(--shadow-soft);
+}
+
+.analysis-result {
+    display: grid;
+    gap: 16px;
+}
+
+.analysis-score-card {
+    display: grid;
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+    padding: 16px;
+    border: 1px solid rgba(40, 121, 184, 0.14);
+    border-radius: var(--radius);
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(238, 250, 255, 0.72)),
+        rgba(255, 255, 255, 0.62);
+    box-shadow: var(--shadow-soft);
+}
+
+.score-orbit {
+    width: 132px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.96) 0 58%, transparent 59%),
+        conic-gradient(var(--blue) calc(var(--score) * 1%), rgba(23, 32, 42, 0.08) 0),
+        var(--paper);
+    box-shadow: inset 0 0 0 8px rgba(255, 255, 255, 0.76), 0 16px 38px rgba(40, 121, 184, 0.14);
+}
+
+.score-orbit strong {
+    display: block;
+    font-size: 44px;
+    line-height: 0.88;
+}
+
+.score-orbit span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+}
+
+.analysis-metrics {
+    display: grid;
+    gap: 12px;
+}
+
+.analysis-metric-card,
+.analysis-zone-card {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.66);
+    box-shadow: var(--shadow-soft);
+}
+
+.analysis-metric-card p,
+.analysis-zone-card p {
+    margin: 0;
+}
+
+.analysis-metric-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: baseline;
+}
+
+.analysis-metric-head strong {
+    font-size: 18px;
+}
+
+.analysis-metric-head span {
+    color: var(--blue-deep);
+    font-weight: 950;
+}
+
+.analysis-metric-card .track {
+    height: 13px;
+}
+
+.analysis-zone-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.analysis-zone-card h3 {
+    margin-bottom: 0;
 }
 
 .zone-list,
@@ -911,7 +1070,8 @@ h3 {
 .composer input,
 .field-block input,
 .promo-input,
-.meal-input {
+.meal-input,
+.select-input {
     width: 100%;
     min-height: 54px;
     border-radius: var(--radius);
@@ -924,9 +1084,17 @@ h3 {
 
 .composer input:focus,
 .field-block input:focus,
-.meal-input:focus {
+.meal-input:focus,
+.select-input:focus {
     border-color: rgba(40, 121, 184, 0.42);
     box-shadow: 0 0 0 4px rgba(116, 215, 255, 0.16);
+}
+
+.select-input {
+    appearance: none;
+    background:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%) calc(100% - 22px) 50% / 7px 7px no-repeat,
+        linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(238, 250, 255, 0.74));
 }
 
 .send-button {
@@ -1439,7 +1607,10 @@ h3 {
     }
 
     .grid.two,
-    .upload-grid {
+    .upload-grid,
+    .analysis-score-card,
+    .analysis-zone-grid,
+    .access-notice {
         grid-template-columns: 1fr;
     }
 
@@ -1558,6 +1729,28 @@ h3 {
     .metric-row {
         grid-template-columns: 92px minmax(0, 1fr) 38px;
         font-size: 14px;
+    }
+
+    .upload-tile {
+        min-height: 190px;
+    }
+
+    .analysis-score-card {
+        justify-items: center;
+        text-align: center;
+    }
+
+    .analysis-score-card h1 {
+        font-size: 34px;
+    }
+
+    .score-orbit {
+        width: 128px;
+    }
+
+    .analysis-metric-card,
+    .analysis-zone-card {
+        padding: 14px;
     }
 
     .battle-stats {
