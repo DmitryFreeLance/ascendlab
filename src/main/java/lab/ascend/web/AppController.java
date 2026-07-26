@@ -57,18 +57,26 @@ public class AppController {
     @GetMapping("/bootstrap")
     public Map<String, Object> bootstrap(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
         UserProfile user = currentUser.require(initData);
-        return Map.of(
-                "user", user,
-                "onboardingSeen", users.onboardingSeen(user.telegramId()),
-                "isAdmin", admins.isAdmin(user.telegramId()),
-                "subscription", subscriptions.status(user.telegramId()),
-                "chatUsage", chatUsage.status(user.telegramId()),
-                "hasFaceAnalysis", analyses.existsByTelegramId(user.telegramId()),
-                "plans", plans.all(),
-                "payments", payments.paymentConfig(),
-                "features", features(),
-                "botUsername", properties.telegram().botUsername()
+        return Map.ofEntries(
+                Map.entry("user", user),
+                Map.entry("onboardingSeen", users.onboardingSeen(user.telegramId())),
+                Map.entry("isAdmin", admins.isAdmin(user.telegramId())),
+                Map.entry("subscription", subscriptions.status(user.telegramId())),
+                Map.entry("chatUsage", chatUsage.status(user.telegramId())),
+                Map.entry("hasFaceAnalysis", analyses.existsByTelegramId(user.telegramId())),
+                Map.entry("communityProgress", analyses.communityProgress()),
+                Map.entry("plans", plans.all()),
+                Map.entry("payments", payments.paymentConfig()),
+                Map.entry("features", features()),
+                Map.entry("botUsername", properties.telegram().botUsername())
         );
+    }
+
+    @GetMapping("/community-progress")
+    public Map<String, Object> communityProgress(
+            @RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
+        currentUser.require(initData);
+        return analyses.communityProgress();
     }
 
     @PatchMapping("/settings")

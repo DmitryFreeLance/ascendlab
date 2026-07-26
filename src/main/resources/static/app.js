@@ -433,14 +433,7 @@ function renderDashboard() {
             <button class="button secondary" data-view="gpt"><i data-lucide="brain"></i>Спросить BodyGPT</button>
         </div>
     </section>` : ""}
-    <section class="section-panel">
-        <p class="eyebrow">Пульс BodyLab</p>
-        <h2>Пульс дня</h2>
-        ${metric("Кожа", 72)}
-        ${metric("Сон", active ? 82 : 41)}
-        ${metric("Стиль", 66)}
-        ${metric("Питание", active ? 74 : 34)}
-    </section>
+    ${renderCommunityProgress()}
     ${active ? "" : `<section class="section-panel">
         <p class="eyebrow">Выбери тариф</p>
         <h2>Полный доступ ко всем функциям</h2>
@@ -451,6 +444,74 @@ function renderDashboard() {
         <p class="eyebrow">Быстрые функции</p>
         <div class="grid three">${state.boot.features.slice(0, 6).map(featureCard).join("")}</div>
     </section>`;
+}
+
+function renderCommunityProgress() {
+    const progress = state.boot?.communityProgress || {};
+    const participants = Number(progress.participants || 0);
+    const comparisons = Number(progress.comparisonUsers || 0);
+    const previous = Number(progress.previousAverage || 0);
+    const current = Number(progress.currentAverage || 0);
+    const delta = Number(progress.delta || 0);
+    const analyzedToday = Number(progress.analyzedToday || 0);
+    const improvedPercent = Number(progress.improvedPercent || 0);
+    const hasComparison = comparisons > 0;
+    const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    const deltaLabel = hasComparison ? `${delta > 0 ? "+" : ""}${formatScore(delta)}` : "первая точка";
+    const bars = communityWave(current);
+    return `<section class="section-panel community-progress ${direction}">
+        <div class="community-progress-head">
+            <div>
+                <p class="eyebrow">BodyLab network</p>
+                <h2>Прогресс всех</h2>
+                <p class="muted">Живая динамика по последним AI-анализам пользователей.</p>
+            </div>
+            <span class="live-badge"><span></span>live</span>
+        </div>
+        <div class="progress-comparison">
+            <div class="progress-value previous">
+                <small>Прошлый замер</small>
+                <strong>${formatScore(previous)}</strong>
+                <span>средний балл</span>
+            </div>
+            <div class="progress-shift">
+                <span class="shift-line"></span>
+                <strong>${deltaLabel}</strong>
+                <small>${hasComparison ? "изменение после нового анализа" : "ждём повторных анализов"}</small>
+            </div>
+            <div class="progress-value current">
+                <small>После анализа</small>
+                <strong>${formatScore(current)}</strong>
+                <span>новое значение</span>
+            </div>
+        </div>
+        <div class="community-scale" style="--previous:${Math.max(0, Math.min(100, previous))}%;--current:${Math.max(0, Math.min(100, current))}%">
+            <div class="scale-track"><span></span><i></i><b></b></div>
+            <div class="scale-labels"><span>0</span><span>collective score</span><span>100</span></div>
+        </div>
+        <div class="community-footer">
+            <div class="community-stats">
+                <span><strong>${participants}</strong> участников</span>
+                <span><strong>${analyzedToday}</strong> анализов сегодня</span>
+                <span><strong>${hasComparison ? improvedPercent + "%" : "—"}</strong> улучшили результат</span>
+            </div>
+            <div class="community-wave" aria-hidden="true">${bars.map(height => `<i style="--h:${height}%"></i>`).join("")}</div>
+        </div>
+        ${hasComparison ? `<p class="community-note">Дельта рассчитана по ${comparisons} пользователям с двумя и более анализами — сравниваются их прошлый и новый результаты.</p>` : `<p class="community-note">Как только появятся повторные анализы, здесь проявится честная дельта «до → после» по одной и той же группе.</p>`}
+    </section>`;
+}
+
+function communityWave(score) {
+    const base = Math.max(18, Math.min(78, Number(score || 42)));
+    return Array.from({ length: 18 }, (_, index) => {
+        const wave = Math.sin(index * 0.82) * 18 + Math.cos(index * 0.37) * 8;
+        return Math.max(16, Math.min(96, Math.round(base + wave)));
+    });
+}
+
+function formatScore(value) {
+    const number = Number(value || 0);
+    return Number.isInteger(number) ? String(number) : number.toFixed(1);
 }
 
 function renderAccessNotice() {
@@ -1859,6 +1920,7 @@ async function runAnalysis() {
         ensurePlanStartKey();
         state.selectedPlanDay = currentPlanDay();
         saveAnalysis();
+        await refreshCommunityProgress();
         render();
         toast(isPro() ? "Анализ готов. Открой сегодняшний маршрут." : "Анализ готов.");
     } catch (error) {
@@ -1866,6 +1928,15 @@ async function runAnalysis() {
     } finally {
         state.busy.analysis = false;
         render();
+    }
+}
+
+async function refreshCommunityProgress() {
+    try {
+        const progress = await api("/api/community-progress", { method: "GET" });
+        if (state.boot) state.boot.communityProgress = progress;
+    } catch (_) {
+        // The completed personal analysis remains available even if the aggregate pulse refresh is delayed.
     }
 }
 
