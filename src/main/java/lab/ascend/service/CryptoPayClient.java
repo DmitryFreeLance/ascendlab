@@ -55,8 +55,33 @@ public class CryptoPayClient {
             throw new IllegalStateException("Crypto Pay API error: " + response);
         }
         JsonNode result = response.path("result");
-        String url = firstText(result, "mini_app_invoice_url", "web_app_invoice_url", "bot_invoice_url", "pay_url");
+        String url = firstText(result, "bot_invoice_url", "pay_url", "web_app_invoice_url", "mini_app_invoice_url");
         return new CryptoInvoice(result.path("invoice_id").asText(), url, result.toString());
+    }
+
+    public JsonNode getInvoice(String invoiceId) {
+        if (!properties.payments().cryptoConfigured() || invoiceId == null || invoiceId.isBlank()) {
+            return null;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("invoice_ids", invoiceId);
+        body.put("count", 1);
+        JsonNode response = restClient.post()
+                .uri(trimSlash(properties.payments().cryptoPayBaseUrl()) + "/api/getInvoices")
+                .header("Crypto-Pay-API-Token", properties.payments().cryptoPayToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+        if (response == null || !response.path("ok").asBoolean(false)) {
+            return null;
+        }
+        JsonNode result = response.path("result");
+        JsonNode items = result.isArray() ? result : result.path("items");
+        if (!items.isArray() || items.isEmpty()) {
+            return null;
+        }
+        return items.get(0);
     }
 
     public boolean verifySignature(String rawBody, String signature) {

@@ -55,6 +55,9 @@ public class PaymentService {
         }
         String paymentId = payments.create(telegramId, plan.code(), "crypto_pay", plan.usd().toPlainString(), "USDT", null);
         CryptoPayClient.CryptoInvoice invoice = cryptoPay.createInvoice(telegramId, plan, paymentId);
+        if (invoice.url().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Crypto Pay did not return an invoice URL");
+        }
         payments.linkExternal(paymentId, invoice.invoiceId(), invoice.url(), invoice.payload());
         return new PaymentLink(paymentId, "crypto_pay", invoice.url(), "open_telegram_link");
     }
@@ -138,6 +141,8 @@ public class PaymentService {
         if (local.telegramId() != telegramId) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
+        reconcileCryptoIfNeeded(local);
+        local = payments.findRequired(paymentId);
         return new PaymentState(paymentId, local.provider(), local.status(), subscriptions.isActive(telegramId));
     }
 
@@ -153,6 +158,24 @@ public class PaymentService {
 
     private boolean alreadyPaid(String paymentId) {
         return PaymentStatus.PAID.name().equals(payments.findRequired(paymentId).status());
+    }
+
+    private void reconcileCryptoIfNeeded(PaymentRepository.PaymentRecord local) {
+        if (!"crypto_pay".equals(local.provider()) || !PaymentStatus.PENDING.name().equals(local.status())) {
+            return;
+        }
+        JsonNode invoice = cryptoPay.getInvoice(local.externalId());
+        if (invoice == null || invoice.isMissingNode()) {
+            return;
+        }
+        String status = invoice.path("status").asText("");
+        if ("paid".equalsIgnoreCase(status)) {
+            PlanOffer plan = plans.get(local.planCode());
+            payments.markStatus(local.id(), PaymentStatus.PAID, invoice.path("invoice_id").asText(local.externalId()), invoice.toString());
+            subscriptions.activate(local.telegramId(), plan, "crypto_pay", local.id());
+        } else if ("expired".equalsIgnoreCase(status)) {
+            payments.markStatus(local.id(), PaymentStatus.CANCELLED, invoice.path("invoice_id").asText(local.externalId()), invoice.toString());
+        }
     }
 
     public record PaymentLink(String paymentId, String provider, String url, String action) {

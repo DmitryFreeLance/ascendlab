@@ -44,19 +44,20 @@ public class PaymentRepository {
 
     public PaymentRecord findRequired(String paymentId) {
         return jdbc.queryForObject("""
-                        SELECT id, telegram_id, plan_code, provider, status FROM payments WHERE id = ?
+                        SELECT id, telegram_id, plan_code, provider, status, external_id FROM payments WHERE id = ?
                         """,
                 (rs, rowNum) -> new PaymentRecord(
                         rs.getString("id"),
                         rs.getLong("telegram_id"),
                         rs.getString("plan_code"),
                         rs.getString("provider"),
-                        rs.getString("status")
+                        rs.getString("status"),
+                        rs.getString("external_id")
                 ),
                 paymentId);
     }
 
-    public record PaymentRecord(String id, long telegramId, String planCode, String provider, String status) {
+    public record PaymentRecord(String id, long telegramId, String planCode, String provider, String status, String externalId) {
     }
 
     private static String fitExternalId(String value) {

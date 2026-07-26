@@ -8,9 +8,9 @@ const ONBOARDING_KEY = "bodylab:onboarding";
 const LEGACY_ONBOARDING_KEY = "ascendlab:onboarding";
 const MAX_CHAT_MESSAGES = 28;
 const CHAT_CONTEXT_MESSAGES = 8;
-const CHAT_TYPE_DELAY = 34;
-const CHAT_RENDER_INTERVAL = 64;
-const CHAT_PUNCTUATION_DELAY = 132;
+const CHAT_TYPE_DELAY = 22;
+const CHAT_RENDER_INTERVAL = 42;
+const CHAT_PUNCTUATION_DELAY = 72;
 const BODYGPT_DAILY_LIMIT = 100;
 const BODYLAB_DAY_SHIFT_MS = 60 * 60 * 1000;
 const PHOTO_ANALYSIS_COOLDOWN_MS = 4 * 60 * 60 * 1000;
@@ -26,7 +26,7 @@ function apiPath(path) {
 const state = {
     view: "dashboard",
     boot: null,
-    selectedPlan: "quarter",
+    selectedPlan: "intro",
     onboardingStep: 0,
     files: { front: null, side: null, body: null },
     previews: { front: null, side: null, body: null },
@@ -93,9 +93,9 @@ const planPhases = [
 ];
 
 const battleOpponents = [
-    { id: "neo", name: "Артём", tier: "сильный свет", score: 86, image: "assets/battle/fake-neo.jpg" },
-    { id: "soft", name: "Никита", tier: "ровная подача", score: 63, image: "assets/battle/fake-soft.jpg" },
-    { id: "raw", name: "Илья", tier: "сырой ракурс", score: 49, image: "assets/battle/fake-raw.jpg" }
+    { id: "neo", name: "Артём", tier: "сильная внешность", score: 86, image: "assets/battle/fake-neo.jpg" },
+    { id: "soft", name: "Никита", tier: "ровный образ", score: 63, image: "assets/battle/fake-soft.jpg" },
+    { id: "raw", name: "Илья", tier: "слабый ракурс", score: 49, image: "assets/battle/fake-raw.jpg" }
 ];
 
 const nav = [
@@ -203,21 +203,62 @@ const toolWorkspaces = {
     }
 };
 
-const maleAcademyImages = ["assets/battle/fake-neo.jpg", "assets/battle/fake-soft.jpg", "assets/battle/fake-raw.jpg"];
+const academyPhotoBank = {
+    skin: [
+        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
+    ],
+    hair: [
+        "https://images.unsplash.com/photo-1588349297539-6915a426001e?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=82"
+    ],
+    brows: [
+        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
+    ],
+    style: [
+        "https://images.unsplash.com/photo-1775036423024-a9aaea2a6254?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82"
+    ],
+    posture: [
+        "https://images.unsplash.com/photo-1605296867304-46d5465a13f1?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1626082787732-44e4e8cf9893?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
+    ],
+    photo: [
+        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82"
+    ],
+    body: [
+        "https://images.unsplash.com/photo-1605296867304-46d5465a13f1?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1626082787732-44e4e8cf9893?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82"
+    ],
+    hard: [
+        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82",
+        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
+    ]
+};
 
 const guideCategories = [
-    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets", image: maleAcademyImage(0) },
-    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors", image: maleAcademyImage(1) },
-    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye", image: maleAcademyImage(2) },
-    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles", image: maleAcademyImage(0) },
-    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity", image: maleAcademyImage(1) },
-    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture", image: maleAcademyImage(2) },
-    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot", image: maleAcademyImage(0) },
-    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile", image: maleAcademyImage(1) },
-    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line", image: maleAcademyImage(2) },
-    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert", image: maleAcademyImage(0) },
-    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus", image: maleAcademyImage(1) },
-    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell", image: maleAcademyImage(2) }
+    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets", image: academyGuideImage("skin", 0) },
+    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors", image: academyGuideImage("hair", 0) },
+    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye", image: academyGuideImage("brows", 0) },
+    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles", image: academyGuideImage("style", 0) },
+    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity", image: academyGuideImage("posture", 0) },
+    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture", image: academyGuideImage("photo", 0) },
+    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot", image: academyGuideImage("jaw", 0) },
+    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile", image: academyGuideImage("ortho", 0) },
+    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line", image: academyGuideImage("bite", 0) },
+    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert", image: academyGuideImage("operations", 0) },
+    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus", image: academyGuideImage("implants", 0) },
+    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell", image: academyGuideImage("body", 0) }
 ];
 
 const guideSeeds = {
@@ -329,7 +370,7 @@ async function bootstrap() {
         loadLocalState();
         state.chatUsage = state.boot.chatUsage || state.chatUsage;
         ensurePlanStartKey();
-        state.selectedPlan = state.boot.plans.find(plan => plan.code === "quarter")?.code || state.boot.plans[0].code;
+        state.selectedPlan = preferredPlanCode();
         renderNav();
         const seen = Boolean(state.boot.onboardingSeen || localStorage.getItem(ONBOARDING_KEY) || localStorage.getItem(LEGACY_ONBOARDING_KEY));
         if (!seen) {
@@ -1101,10 +1142,6 @@ function guidesForCategory(categoryId) {
     return guideLibrary.filter(guide => guide.categoryId === categoryId);
 }
 
-function maleAcademyImage(index = 0) {
-    return maleAcademyImages[Math.abs(index) % maleAcademyImages.length];
-}
-
 function guideIntroFor(category, title) {
     const intro = {
         skin: "Уход, который делает лицо свежее без хаотичных покупок и резких экспериментов.",
@@ -1124,9 +1161,12 @@ function guideIntroFor(category, title) {
 }
 
 function guideImageFor(category, index) {
-    if (index === 1) return category.image;
-    const categoryOffset = guideCategories.findIndex(item => item.id === category.id);
-    return maleAcademyImage(categoryOffset + index);
+    return academyGuideImage(category.id, index, category.track);
+}
+
+function academyGuideImage(categoryId, index = 0, track = "soft") {
+    const bank = academyPhotoBank[categoryId] || academyPhotoBank[track === "hard" ? "hard" : "skin"];
+    return bank[Math.abs(index) % bank.length];
 }
 
 function guideSectionsFor(category, title) {
@@ -1173,7 +1213,7 @@ function renderBattle() {
     return `<section class="section-panel battle-arena">
         <p class="eyebrow">MogBattle</p>
         <h1>MogBattle</h1>
-        <p class="muted">Соперник выпадает случайно. Чем точнее фото и свежее анализ, тем честнее баттл.</p>
+        <p class="muted">Соперник выпадает случайно. Баттл сравнивает общий визуальный уровень: лицо, кожу, контур, стиль, форму и качество фото.</p>
         <div class="battle-stats">
             <div class="battle-stat"><small>ELO</small><strong>${elo}</strong></div>
             <div class="battle-stat"><small>Ранг</small><strong>${battleRank(elo)}</strong></div>
@@ -1554,6 +1594,14 @@ function featureCard(feature) {
 function planCard(plan) {
     const selected = state.selectedPlan === plan.code;
     return `<button class="plan-card ${selected ? "selected" : ""}" data-plan="${plan.code}">
+        <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge ? `<span class="badge">${plan.badge}</span>` : ""}</span>
+        <span class="price">${plan.rub} ₽</span>
+    </button>`;
+}
+
+function paymentPlanCard(plan) {
+    const selected = state.selectedPlan === plan.code;
+    return `<button class="plan-card payment-plan-card ${selected ? "selected" : ""}" data-payment-plan="${plan.code}" ${state.busy.payment ? "disabled" : ""}>
         <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge ? `<span class="badge">${plan.badge}</span>` : ""}</span>
         <span class="price">${plan.rub} ₽</span>
     </button>`;
@@ -2203,16 +2251,34 @@ async function copyAdminSnapshot() {
 }
 
 function openPayment() {
+    if (!state.boot.plans.some(plan => plan.code === state.selectedPlan)) {
+        state.selectedPlan = preferredPlanCode();
+    }
+    updatePaymentModal();
+    openModal("paymentModal");
+}
+
+function updatePaymentModal() {
     const plan = selectedPlan();
-    document.querySelector("#paymentTitle").textContent = plan.title;
-    document.querySelector("#paymentSubtitle").textContent = "Выбери удобный способ. Доступ откроется автоматически после оплаты.";
-    document.querySelector("#paymentPlanSummary").innerHTML = `<button class="plan-card selected"><span><strong>${plan.title}</strong><small>${plan.subtitle}</small></span><span class="price">${plan.rub} ₽</span></button>`;
     const config = state.boot.payments;
+    document.querySelector("#paymentTitle").textContent = plan.title;
+    document.querySelector("#paymentSubtitle").textContent = state.busy.payment
+        ? "Ожидаю подтверждение оплаты..."
+        : "Выбери тариф и удобный способ оплаты.";
+    document.querySelector("#paymentPlanSummary").innerHTML = `<div class="plan-list payment-plan-list">${state.boot.plans.map(paymentPlanCard).join("")}</div>`;
+    setProviderSubtitle("stars", `${plan.stars} Stars · внутри Telegram`);
+    setProviderSubtitle("crypto", `${formatUsd(plan.usd)} USDT · счёт в Crypto Bot`);
+    setProviderSubtitle("card", `${plan.rub} ₽ · СБП/Карта/Юмани`);
     document.querySelector("[data-provider='stars']").disabled = state.busy.payment || !config.telegramStars;
     document.querySelector("[data-provider='crypto']").disabled = state.busy.payment || !config.cryptoPay;
     document.querySelector("[data-provider='card']").disabled = state.busy.payment || !config.card;
     document.querySelector("#demoActivateButton").style.display = config.demoMode ? "inline-flex" : "none";
-    openModal("paymentModal");
+    refreshIcons();
+}
+
+function setProviderSubtitle(provider, text) {
+    const node = document.querySelector(`[data-provider='${provider}'] small`);
+    if (node) node.textContent = text;
 }
 
 async function pay(provider) {
@@ -2229,16 +2295,19 @@ async function pay(provider) {
         if (link.action === "open_invoice" && tg?.openInvoice) {
             tg.openInvoice(link.url, status => {
                 if (status === "paid") {
-                    waitForPaymentActivation(link.paymentId, plan);
+                    waitForPaymentActivation(link.paymentId, plan, true);
                 } else {
                     setPaymentBusy(false);
                     toast("Счёт закрыт: " + status);
                     bootstrap();
                 }
             });
-        } else if (link.action === "open_telegram_link" && tg?.openTelegramLink) {
+        } else if (link.action === "open_telegram_link" && tg?.openTelegramLink && isTelegramLink(link.url)) {
             tg.openTelegramLink(link.url);
-            setPaymentBusy(false);
+            waitForPaymentActivation(link.paymentId, plan, false);
+        } else if (link.action === "open_telegram_link" && tg?.openLink) {
+            tg.openLink(link.url);
+            waitForPaymentActivation(link.paymentId, plan, false);
         } else if (tg?.openLink) {
             tg.openLink(link.url);
             setPaymentBusy(false);
@@ -2252,8 +2321,8 @@ async function pay(provider) {
     }
 }
 
-async function waitForPaymentActivation(paymentId, plan) {
-    toast("Оплата получена. Активирую доступ...");
+async function waitForPaymentActivation(paymentId, plan, optimistic = false) {
+    toast(optimistic ? "Оплата получена. Активирую доступ..." : "Счёт создан. Жду подтверждение оплаты...");
     for (let attempt = 0; attempt < 12; attempt += 1) {
         await delay(attempt < 2 ? 650 : 1000);
         try {
@@ -2282,20 +2351,9 @@ async function waitForPaymentActivation(paymentId, plan) {
 
 function setPaymentBusy(busy) {
     state.busy.payment = busy;
-    const config = state.boot?.payments || {};
-    const enabled = {
-        stars: Boolean(config.telegramStars),
-        crypto: Boolean(config.cryptoPay),
-        card: Boolean(config.card)
-    };
-    document.querySelectorAll("[data-provider]").forEach(button => {
-        button.disabled = busy || !enabled[button.dataset.provider];
-    });
-    const subtitle = document.querySelector("#paymentSubtitle");
-    if (!subtitle) return;
-    subtitle.textContent = busy
-        ? "Ожидаю подтверждение оплаты..."
-        : "Выбери удобный способ. Доступ откроется автоматически после оплаты.";
+    if (document.querySelector("#paymentModal.open")) {
+        updatePaymentModal();
+    }
 }
 
 function showReturnPaymentNotice() {
@@ -2956,9 +3014,9 @@ function battleRank(elo) {
 }
 
 function battleAdvice(result, delta) {
-    if (result === "win") return "Твоя подача сильнее в этом сравнении. Закрепи преимущество свежим фото и чистым контуром.";
-    if (result === "tie") return "Профили близки. Решать будут свет, выражение лица, стрижка и качество фото.";
-    return `Разрыв ${Math.abs(delta)} пунктов. Быстрый фокус: свет, кожа, контур волос и более собранный образ.`;
+    if (result === "win") return "Твой общий визуальный уровень выше в этом сравнении: сильнее читаются лицо, свежесть, контур и образ.";
+    if (result === "tie") return "Внешность близка по баллам. Решать будут кожа, стрижка, силуэт, стиль и качество основного фото.";
+    return `Разрыв ${Math.abs(delta)} пунктов. Быстрый фокус: кожа, контур волос, силуэт, посадка одежды и более сильное фото.`;
 }
 
 function saveBattleState() {
@@ -3125,8 +3183,23 @@ function blurActiveInput() {
     }
 }
 
+function preferredPlanCode() {
+    return state.boot?.plans?.find(plan => plan.code === "intro")?.code || state.boot?.plans?.[0]?.code || "intro";
+}
+
 function selectedPlan() {
     return state.boot.plans.find(plan => plan.code === state.selectedPlan) || state.boot.plans[0];
+}
+
+function formatUsd(value) {
+    return Number(value || 0).toLocaleString("ru-RU", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function isTelegramLink(url) {
+    return /^https:\/\/t\.me\//i.test(String(url || ""));
 }
 
 function isPro() {
@@ -3572,6 +3645,12 @@ function bindGlobal() {
     });
     document.querySelectorAll("[data-close-modal]").forEach(button => button.addEventListener("click", closeModals));
     document.querySelector("#paymentModal").addEventListener("click", event => {
+        const planButton = event.target.closest("[data-payment-plan]");
+        if (planButton && !state.busy.payment) {
+            state.selectedPlan = planButton.dataset.paymentPlan;
+            updatePaymentModal();
+            return;
+        }
         const method = event.target.closest("[data-provider]");
         if (method && !method.disabled) pay(method.dataset.provider);
         if (event.target.id === "paymentModal") closeModals();
