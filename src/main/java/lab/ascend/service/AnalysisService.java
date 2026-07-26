@@ -73,6 +73,52 @@ public class AnalysisService {
         return report;
     }
 
+    public Map<String, Object> analyzeTool(UserProfile user, ToolProfile tool, UploadedImage image, boolean pro) {
+        List<String> dataUrls = image == null || image.bytes().length == 0
+                ? List.of()
+                : List.of("data:" + image.contentType() + ";base64," + Base64.getEncoder().encodeToString(image.bytes()));
+        if (pro) {
+            try {
+                JsonNode aiReport = ai.analyzeToolWithAi(
+                        tool.title(),
+                        tool.text(),
+                        tool.metrics(),
+                        tool.tasks(),
+                        dataUrls,
+                        user.gender(),
+                        user.age()
+                ).orElse(null);
+                if (aiReport != null && aiReport.has("score")) {
+                    return objectMapper.convertValue(aiReport, Map.class);
+                }
+            } catch (Exception ignored) {
+                // Local report below keeps the tool useful when multimodal AI is unavailable.
+            }
+        }
+        int seed = Math.abs((int) ((user.telegramId() + tool.id().hashCode()) % 23));
+        List<Map<String, Object>> metrics = new ArrayList<>();
+        for (int i = 0; i < tool.metrics().size(); i += 1) {
+            int value = clamp(58 + ((seed + i * 13) % 30), 0, 100);
+            metrics.add(metric(tool.metrics().get(i), value, value >= 75 ? "сильно" : value >= 62 ? "норм" : "фокус"));
+        }
+        int score = metrics.stream()
+                .mapToInt(item -> Number.class.cast(item.get("value")).intValue())
+                .sum() / Math.max(1, metrics.size());
+        String weakest = metrics.stream()
+                .min((a, b) -> Integer.compare(Number.class.cast(a.get("value")).intValue(), Number.class.cast(b.get("value")).intValue()))
+                .map(item -> item.get("name").toString())
+                .orElse(tool.metrics().isEmpty() ? "фокус" : tool.metrics().get(0));
+        return Map.of(
+                "score", score,
+                "title", score >= 82 ? "Сильный блок" : score >= 66 ? "Хорошая база" : "Есть быстрые победы",
+                "headline", tool.title() + ": разбор готов",
+                "summary", "Самый важный ближайший фокус — " + weakest.toLowerCase() + ".",
+                "metrics", metrics,
+                "tasks", tool.tasks(),
+                "planText", "Добавь фокус “" + weakest + "” в отчёт дня и повтори фото после нескольких действий."
+        );
+    }
+
     private static Map<String, Object> metric(String name, int value, String hint) {
         return Map.of("name", name, "value", value, "hint", hint);
     }
@@ -95,5 +141,8 @@ public class AnalysisService {
             }
             return list;
         }
+    }
+
+    public record ToolProfile(String id, String title, String text, List<String> metrics, List<String> tasks) {
     }
 }

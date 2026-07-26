@@ -33,7 +33,7 @@ const state = {
     chatUsage: { limit: BODYGPT_DAILY_LIMIT, used: 0, remaining: BODYGPT_DAILY_LIMIT },
     accessNotice: null,
     pendingAccessPlan: null,
-    busy: { analysis: false, body: false, meal: false, chat: false, payment: false, battle: false },
+    busy: { analysis: false, body: false, meal: false, chat: false, payment: false, battle: false, tool: "" },
     planReports: {},
     selectedPlanDay: null,
     selectedGuide: null,
@@ -41,6 +41,8 @@ const state = {
     bodyAnalysis: null,
     bodyHistory: [],
     analysisHistory: [],
+    toolReports: {},
+    toolHistory: {},
     battleOpponent: "neo",
     battleResult: null,
     battleHistory: [],
@@ -81,9 +83,9 @@ const planPhases = [
 ];
 
 const battleOpponents = [
-    { id: "neo", name: "Неон", tier: "сильный свет", score: 86, image: "assets/battle/fake-neo.jpg" },
-    { id: "soft", name: "Софт", tier: "ровная подача", score: 63, image: "assets/battle/fake-soft.jpg" },
-    { id: "raw", name: "Роу", tier: "сырой ракурс", score: 49, image: "assets/battle/fake-raw.jpg" }
+    { id: "neo", name: "Артём", tier: "сильный свет", score: 86, image: "assets/battle/fake-neo.jpg" },
+    { id: "soft", name: "Никита", tier: "ровная подача", score: 63, image: "assets/battle/fake-soft.jpg" },
+    { id: "raw", name: "Илья", tier: "сырой ракурс", score: 49, image: "assets/battle/fake-raw.jpg" }
 ];
 
 const nav = [
@@ -106,6 +108,9 @@ const toolWorkspaces = {
         title: "Уход за кожей",
         text: "Собери утро и вечер без лишних активов. BodyLab держит фокус на барьере, SPF, очищении и стабильности.",
         icon: "droplets",
+        uploadTitle: "Фото кожи",
+        uploadSubtitle: "лицо крупно, мягкий свет",
+        emptyText: "После фото BodyLab оценит тон, текстуру и зоны ухода.",
         metrics: [["Барьер", 68], ["SPF", 82], ["Регулярность", 54]],
         tasks: ["Утро: очищение, увлажнение, SPF.", "Вечер: очищение и восстановление.", "Новый актив вводить не чаще одного раза в 10 дней."]
     },
@@ -114,6 +119,9 @@ const toolWorkspaces = {
         title: "Контур и волосы",
         text: "Проверь виски, затылок, объём сверху и то, как волосы поддерживают форму лица.",
         icon: "scissors",
+        uploadTitle: "Фото волос",
+        uploadSubtitle: "спереди или 3/4",
+        emptyText: "После фото появится оценка контура, объёма и формы.",
         metrics: [["Контур", 61], ["Объём", 73], ["Форма", 66]],
         tasks: ["Сделай фото волос спереди и сбоку.", "Отметь, где контур выглядит тяжёлым.", "Подготовь 2 референса для мастера."]
     },
@@ -122,6 +130,9 @@ const toolWorkspaces = {
         title: "Сон и восстановление",
         text: "Сон напрямую влияет на отёки, кожу, настроение, голод и качество тренировок.",
         icon: "moon",
+        uploadTitle: "Утреннее фото",
+        uploadSubtitle: "без фильтров",
+        emptyText: "После фото появится оценка свежести лица, отёков и режима.",
         metrics: [["Режим", 58], ["Глубина", 64], ["Утренний вид", 52]],
         tasks: ["Лечь в один и тот же коридор времени.", "За 60 минут убрать яркий экран.", "Утром отметить отёки и энергию."]
     },
@@ -130,6 +141,9 @@ const toolWorkspaces = {
         title: "Гидратация",
         text: "Вода нужна не для магии, а для стабильной кожи, тренировок и контроля аппетита.",
         icon: "waves",
+        uploadTitle: "Фото лица",
+        uploadSubtitle: "утро или дневной свет",
+        emptyText: "После фото появится оценка свежести, отёков и стабильности кожи.",
         metrics: [["Норма", 44], ["Соль", 63], ["Отёки", 57]],
         tasks: ["Начни с 500 мл в первой половине дня.", "Разнеси воду равномерно.", "Отметь солёную еду вечером."]
     },
@@ -138,6 +152,9 @@ const toolWorkspaces = {
         title: "Style Guide",
         text: "Силуэт, посадка и цвета могут усилить внешность быстрее, чем случайные покупки.",
         icon: "sparkles",
+        uploadTitle: "Фото образа",
+        uploadSubtitle: "полный рост или зеркало",
+        emptyText: "После фото появится оценка посадки, цвета и силуэта.",
         metrics: [["Посадка", 69], ["Цвета", 62], ["Силуэт", 71]],
         tasks: ["Выбери один чистый базовый образ.", "Убери вещь, которая ломает силуэт.", "Сфотографируй образ при дневном свете."]
     },
@@ -146,6 +163,9 @@ const toolWorkspaces = {
         title: "Свет и ракурсы",
         text: "Профильное фото выигрывает не фильтрами, а высотой камеры, светом и выражением лица.",
         icon: "aperture",
+        uploadTitle: "Профильное фото",
+        uploadSubtitle: "как для аватарки",
+        emptyText: "После фото появится оценка света, ракурса и выражения.",
         metrics: [["Свет", 74], ["Ракурс", 59], ["Выражение", 67]],
         tasks: ["Камера на уровне глаз.", "Свет из окна под углом 30-45 градусов.", "Сделай серию из 12 кадров, выбери 2."]
     },
@@ -154,6 +174,9 @@ const toolWorkspaces = {
         title: "Силуэт и цвета",
         text: "Гардероб должен работать на форму тела и контраст лица, а не просто быть набором вещей.",
         icon: "shirt",
+        uploadTitle: "Фото в одежде",
+        uploadSubtitle: "полный образ",
+        emptyText: "После фото появится оценка базы, сочетаний и акцентов.",
         metrics: [["База", 57], ["Комбинации", 48], ["Акценты", 62]],
         tasks: ["Собери 3 связки верх-низ-обувь.", "Отложи вещи с плохой посадкой.", "Добавь один цветовой акцент."]
     },
@@ -162,6 +185,9 @@ const toolWorkspaces = {
         title: "Похож на",
         text: "Сравнивай не “на кого похож”, а какие черты подачи можно усилить: волосы, свет, стиль, выражение.",
         icon: "user-search",
+        uploadTitle: "Фото лица",
+        uploadSubtitle: "лицо и стиль в кадре",
+        emptyText: "После фото BodyLab подберёт архетип подачи и зоны усиления.",
         metrics: [["Архетип", 65], ["Подача", 58], ["Фото", 71]],
         tasks: ["Выбери 2 референса внешности.", "Разбери, что можно повторить без копирования.", "Сохрани идеи в план дня."]
     }
@@ -687,23 +713,58 @@ function renderToolWorkspace(id) {
     const tool = toolWorkspaces[id];
     if (!tool) return renderFeatures();
     if (!isPro()) return renderLockedFeature(tool.title, `${tool.title} доступен с BodyPro.`);
+    const kind = toolUploadKind(id);
+    const report = state.toolReports[id];
+    const busy = state.busy.tool === id;
     return `<section class="section-panel tool-workspace">
         <span class="icon-shell"><i data-lucide="${tool.icon}"></i></span>
         <p class="eyebrow">${tool.eyebrow}</p>
         <h1>${tool.title}</h1>
         <p class="muted">${tool.text}</p>
-        <div class="analysis-metrics">${tool.metrics.map(([name, value]) => analysisMetric({ name, value, hint: toolMetricHint(value) })).join("")}</div>
+        <div class="upload-grid">
+            ${uploadTile(kind, tool.uploadTitle || "Фото для анализа", tool.uploadSubtitle || "хорошее освещение")}
+            ${report ? `<div class="tool-scan-card">
+                <div class="score-orbit" style="--score:${report.score}">
+                    <div class="score-center"><strong>${report.score}</strong><span>/100</span></div>
+                </div>
+                <p class="eyebrow">Оценка</p>
+                <strong>${escapeHtml(report.title)}</strong>
+                <p class="muted">${escapeHtml(report.summary)}</p>
+            </div>` : `<div class="tool-scan-card empty">
+                <span class="icon-shell"><i data-lucide="${tool.icon}"></i></span>
+                <p class="eyebrow">Оценка</p>
+                <strong>Ждёт фото</strong>
+                <p class="muted">${escapeHtml(tool.emptyText || "После фото появятся оценка, выводы и первые действия.")}</p>
+            </div>`}
+        </div>
+        <button class="button primary ${busy ? "processing" : ""}" data-action="run-tool-analysis" data-tool-id="${id}" ${busy ? "disabled" : ""}>${buttonContent("Оценить", "Анализирую...", "scan-line", busy)}</button>
+    </section>
+    ${report ? renderToolReport(id, tool, report) : `<section class="section-panel tool-empty-state">
+        <p class="eyebrow">Следующий шаг</p>
+        <h2>Сначала анализ</h2>
+        <p class="muted">Загрузи фото и нажми “Оценить”, чтобы получить шкалы, вывод и мини-план.</p>
+    </section>`}`;
+}
+
+function renderToolReport(id, tool, report) {
+    const metrics = Array.isArray(report.metrics) ? report.metrics : [];
+    const tasks = Array.isArray(report.tasks) ? report.tasks : tool.tasks || [];
+    return `<section class="section-panel tool-report">
+        <p class="eyebrow">Результат</p>
+        <h2>${escapeHtml(report.headline || "Разбор готов")}</h2>
+        <div class="analysis-metrics">${metrics.map(analysisMetric).join("")}</div>
+        ${renderScanComparison(report.comparison)}
         <div class="analysis-next-grid">
             <article class="analysis-plan-card">
-                <p class="eyebrow">Сегодня</p>
+                <p class="eyebrow">Первые действия</p>
                 <h3>Мини-план</h3>
-                <ol class="routine-list">${tool.tasks.map(task => `<li>${escapeHtml(task)}</li>`).join("")}</ol>
+                <ol class="routine-list">${tasks.map(task => `<li>${escapeHtml(task)}</li>`).join("")}</ol>
             </article>
             <article class="analysis-plan-card">
                 <p class="eyebrow">Связать</p>
-                <h3>Добавить в маршрут</h3>
-                <p class="muted">Открой дневной маршрут и зафиксируй этот блок в отчёте дня. BodyGPT сможет собрать следующий шаг из всех отметок.</p>
-                <button class="button secondary" data-view="plan"><i data-lucide="route"></i>К маршруту</button>
+                <h3>В дневной план</h3>
+                <p class="muted">${escapeHtml(report.planText || "Зафиксируй этот блок в отчёте дня и вернись к нему после нового фото.")}</p>
+                <button class="button secondary" data-view="plan"><i data-lucide="route"></i>Открыть день</button>
             </article>
         </div>
     </section>`;
@@ -1194,7 +1255,8 @@ function uploadTile(kind, title, subtitle) {
     const file = state.files[kind];
     const preview = state.previews[kind];
     const hasImage = Boolean(file || preview);
-    const icon = kind === "front" ? "camera" : kind === "body" ? "scan-line" : "scan";
+    const toolId = kind.startsWith("tool-") ? kind.slice(5) : "";
+    const icon = kind === "front" ? "camera" : kind === "body" ? "scan-line" : toolWorkspaces[toolId]?.icon || "scan";
     return `<label class="upload-tile ${hasImage ? "has-file" : ""}">
         ${preview ? `<img class="upload-preview" src="${preview}" alt="">` : ""}
         <input type="file" accept="image/png,image/jpeg" data-file="${kind}">
@@ -1234,6 +1296,11 @@ function bindView() {
         if (kind === "body") {
             state.bodyAnalysis = null;
             saveBodyState();
+        }
+        if (kind.startsWith("tool-")) {
+            const toolId = kind.slice(5);
+            delete state.toolReports[toolId];
+            saveToolState();
         }
         render();
         if (file) {
@@ -1331,6 +1398,9 @@ async function handleAction(event) {
     }
     if (action === "run-body-analysis") {
         await runBodyAnalysis();
+    }
+    if (action === "run-tool-analysis") {
+        await runToolAnalysis(event.currentTarget.dataset.toolId);
     }
     if (action === "back-guides") {
         state.selectedGuide = null;
@@ -1476,6 +1546,54 @@ async function runBodyAnalysis() {
         toast(error.message);
     } finally {
         state.busy.body = false;
+        render();
+    }
+}
+
+async function runToolAnalysis(id) {
+    const tool = toolWorkspaces[id];
+    if (!tool || state.busy.tool) return;
+    const kind = toolUploadKind(id);
+    if (!(state.files[kind] || state.previews[kind])) {
+        toast("Сначала загрузи фото.");
+        return;
+    }
+    const previous = state.toolReports[id] || state.toolHistory[id]?.[0] || null;
+    try {
+        state.busy.tool = id;
+        render();
+        toast("Анализирую фото...");
+        let report = null;
+        if (state.files[kind]) {
+            try {
+                const form = new FormData();
+                form.append("photo", state.files[kind]);
+                const response = await fetch(apiPath(`/api/analysis/tools/${id}`), {
+                    method: "POST",
+                    headers: { "X-Telegram-Init-Data": tg?.initData || "" },
+                    body: form
+                });
+                const data = await response.json();
+                if (response.ok) report = normalizeToolReport(id, tool, data);
+            } catch (_) {
+                report = null;
+            }
+        }
+        if (!report) {
+            await delay(780);
+            report = toolAssessment(id, tool, previous);
+        }
+        report.comparison = scanComparison(previous, report, "tool");
+        report.createdAt = new Date().toISOString();
+        state.toolReports[id] = report;
+        state.toolHistory[id] = [compactScan(report), ...(state.toolHistory[id] || [])].slice(0, 8);
+        saveToolState();
+        render();
+        toast(previous ? "Оценка обновлена." : "Оценка готова.");
+    } catch (error) {
+        toast(error.message);
+    } finally {
+        state.busy.tool = "";
         render();
     }
 }
@@ -1855,6 +1973,10 @@ function loadLocalState() {
     state.previews.front = localStorage.getItem(storageKey("preview-front")) || null;
     state.previews.side = localStorage.getItem(storageKey("preview-side")) || null;
     state.previews.body = localStorage.getItem(storageKey("preview-body")) || null;
+    Object.keys(toolWorkspaces).forEach(id => {
+        const kind = toolUploadKind(id);
+        state.previews[kind] = localStorage.getItem(storageKey(`preview-${kind}`)) || null;
+    });
     state.bodyProfile = readJson(storageKey("body-profile"), null);
     state.bodyAnalysis = readJson(storageKey("body-analysis"), null);
     state.bodyHistory = readJson(storageKey("body-history"), []);
@@ -1862,6 +1984,14 @@ function loadLocalState() {
         state.bodyAnalysis = null;
         state.bodyHistory = [];
     }
+    state.toolReports = readJson(storageKey("tool-reports"), {});
+    state.toolHistory = readJson(storageKey("tool-history"), {});
+    Object.keys(toolWorkspaces).forEach(id => {
+        if (!state.previews[toolUploadKind(id)]) {
+            delete state.toolReports[id];
+            delete state.toolHistory[id];
+        }
+    });
     state.selectedPlanDay = defaultPlanDay();
     const battle = readJson(storageKey("battle"), {});
     state.battleOpponent = battleOpponents.some(item => item.id === battle.opponent) ? battle.opponent : state.battleOpponent;
@@ -1940,6 +2070,12 @@ function saveBodyState() {
     if (state.bodyAnalysis) localStorage.setItem(storageKey("body-analysis"), JSON.stringify(state.bodyAnalysis));
     else localStorage.removeItem(storageKey("body-analysis"));
     localStorage.setItem(storageKey("body-history"), JSON.stringify(state.bodyHistory));
+}
+
+function saveToolState() {
+    if (!state.boot?.user) return;
+    localStorage.setItem(storageKey("tool-reports"), JSON.stringify(state.toolReports));
+    localStorage.setItem(storageKey("tool-history"), JSON.stringify(state.toolHistory));
 }
 
 function chatHistoryForAi() {
@@ -2395,6 +2531,101 @@ function renderScanComparison(comparison) {
         </div>
         <div class="plan-adjustment"><i data-lucide="route"></i><span>${escapeHtml(comparison.planShift)}</span></div>
     </article>`;
+}
+
+function toolUploadKind(id) {
+    return `tool-${id}`;
+}
+
+function toolAssessment(id, tool, previous) {
+    const names = (tool.metrics || []).map(([name]) => name);
+    const count = (state.toolHistory[id] || []).length;
+    const baseSeed = Math.abs(hashString(`${id}:${state.boot?.user?.telegramId || "guest"}:${count}:${Date.now()}`));
+    const metrics = names.map((name, index) => {
+        const previousValue = metricMap(previous?.metrics)[name];
+        const raw = 54 + ((baseSeed + index * 17) % 35);
+        const value = previousValue
+            ? clampPercent(previousValue + (((baseSeed >> (index + 1)) % 17) - 8))
+            : clampPercent(raw);
+        return { name, value, hint: toolMetricHint(value) };
+    });
+    const score = Math.round(metrics.reduce((sum, item) => sum + item.value, 0) / Math.max(1, metrics.length));
+    const strongest = metrics.slice().sort((a, b) => b.value - a.value)[0];
+    const weakest = metrics.slice().sort((a, b) => a.value - b.value)[0];
+    return {
+        score,
+        title: score >= 82 ? "Сильный блок" : score >= 66 ? "Хорошая база" : "Есть быстрые победы",
+        headline: toolHeadline(id, score),
+        summary: `${strongest.name} выглядит сильнее всего. Ближайший фокус — ${weakest.name.toLowerCase()}.`,
+        metrics,
+        tasks: toolTasksFor(id, tool, weakest?.name),
+        planText: `Добавь фокус “${weakest.name}” в отчёт дня и повтори фото после 3-5 действий.`
+    };
+}
+
+function normalizeToolReport(id, tool, data) {
+    const fallback = toolAssessment(id, tool, null);
+    const metrics = Array.isArray(data.metrics)
+        ? data.metrics.map((item, index) => ({
+            name: item.name || fallback.metrics[index]?.name || `Метрика ${index + 1}`,
+            value: clampPercent(item.value),
+            hint: cleanPublicText(item.hint || toolMetricHint(clampPercent(item.value)))
+        })).slice(0, 5)
+        : fallback.metrics;
+    const score = clampPercent(data.score || Math.round(metrics.reduce((sum, item) => sum + item.value, 0) / Math.max(1, metrics.length)));
+    return {
+        score,
+        title: cleanPublicText(data.title || fallback.title),
+        headline: cleanPublicText(data.headline || fallback.headline),
+        summary: cleanPublicText(data.summary || fallback.summary),
+        metrics,
+        tasks: Array.isArray(data.tasks) && data.tasks.length
+            ? data.tasks.map(item => cleanPublicText(item)).filter(Boolean).slice(0, 4)
+            : fallback.tasks,
+        planText: cleanPublicText(data.planText || fallback.planText)
+    };
+}
+
+function toolHeadline(id, score) {
+    const map = {
+        skin: score >= 70 ? "Кожа выглядит стабильнее" : "Коже нужна база",
+        hair: score >= 70 ? "Контур читается лучше" : "Контур стоит усилить",
+        sleep: score >= 70 ? "Лицо выглядит свежее" : "Восстановление просит внимания",
+        water: score >= 70 ? "Свежесть держится" : "Отёки и тон требуют режима",
+        style: score >= 70 ? "Образ собран" : "Образу нужна чистая форма",
+        photo: score >= 70 ? "Фото работает на тебя" : "Фото можно сильно усилить",
+        wardrobe: score >= 70 ? "Гардероб собраннее" : "Гардероб просит структуры",
+        looks: score >= 70 ? "Подача стала понятнее" : "Архетип ещё не собран"
+    };
+    return map[id] || "Разбор готов";
+}
+
+function toolTasksFor(id, tool, focus) {
+    const base = Array.isArray(tool.tasks) ? tool.tasks.slice(0, 3) : [];
+    const extra = {
+        skin: `Сделай одно фото кожи вечером и сравни ${focus?.toLowerCase() || "тон"}.`,
+        hair: `Сохрани один референс и сравни линию ${focus?.toLowerCase() || "контура"}.`,
+        sleep: "Отметь утром лицо, энергию и отёки одним коротким комментарием.",
+        water: "Разнеси воду по дню и вечером отметь соль/отёки.",
+        style: "Сними этот образ ещё раз при дневном свете и убери лишний акцент.",
+        photo: "Повтори кадр с камерой на уровне глаз и мягким боковым светом.",
+        wardrobe: "Собери второй образ на той же базе и сравни посадку.",
+        looks: "Выбери один референс подачи и повтори только свет, волосы или позу."
+    }[id];
+    return extra ? [...base, extra].slice(0, 4) : base;
+}
+
+function hashString(value) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
+
+function clampPercent(value) {
+    return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
 }
 
 function bodyProfile() {

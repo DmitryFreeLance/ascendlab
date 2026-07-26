@@ -2174,6 +2174,55 @@ h3 {
         rgba(255, 255, 255, 0.78);
 }
 
+.tool-scan-card {
+    min-height: 190px;
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    text-align: center;
+    padding: 16px;
+    border: 1px solid rgba(40, 121, 184, 0.16);
+    border-radius: var(--radius);
+    background:
+        radial-gradient(circle at 50% 8%, rgba(116, 215, 255, 0.18), transparent 38%),
+        rgba(255, 255, 255, 0.64);
+    box-shadow: var(--shadow-soft);
+}
+
+.tool-scan-card.empty {
+    border-style: dashed;
+    background:
+        linear-gradient(90deg, rgba(40, 121, 184, 0.05) 1px, transparent 1px) 0 0 / 18px 18px,
+        linear-gradient(0deg, rgba(100, 224, 176, 0.05) 1px, transparent 1px) 0 0 / 18px 18px,
+        rgba(255, 255, 255, 0.54);
+}
+
+.tool-scan-card.empty .icon-shell {
+    color: var(--blue-deep);
+    animation: ringFloat 4.6s ease-in-out infinite;
+}
+
+.tool-scan-card strong {
+    font-size: 22px;
+    line-height: 1.1;
+}
+
+.tool-scan-card .muted {
+    margin: 0;
+    max-width: 360px;
+}
+
+.tool-report {
+    display: grid;
+    gap: 16px;
+}
+
+.tool-empty-state {
+    min-height: 176px;
+    display: grid;
+    align-content: center;
+}
+
 .battle-arena {
     display: grid;
     gap: 14px;

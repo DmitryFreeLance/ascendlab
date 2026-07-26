@@ -121,7 +121,7 @@ public class TelegramBotService implements ApplicationRunner {
                 )),
                 List.of(Map.of(
                         "text", "Тех. поддержка",
-                        "url", "https://t.me/" + properties.telegram().botUsername()
+                        "url", "https://t.me/i3_14_2shokk"
                 ))
         ));
         Map<String, Object> body = Map.of(
@@ -133,7 +133,7 @@ public class TelegramBotService implements ApplicationRunner {
     }
 
     private void sendPaySupport(long chatId) {
-        sendMessage(chatId, "Поддержка оплат: напишите сюда номер платежа и способ оплаты. Возвраты Stars делаются через Bot API refundStarPayment после проверки обращения.");
+        sendMessage(chatId, "Поддержка BodyLab: напишите @i3_14_2shokk и приложите номер платежа, если вопрос по оплате.");
     }
 
     private void sendMessage(long chatId, String text) {

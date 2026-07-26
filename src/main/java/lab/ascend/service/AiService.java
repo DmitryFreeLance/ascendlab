@@ -127,6 +127,50 @@ public class AiService {
         }
     }
 
+    public Optional<JsonNode> analyzeToolWithAi(String title,
+                                                String text,
+                                                List<String> metricNames,
+                                                List<String> tasks,
+                                                List<String> dataUrls,
+                                                String gender,
+                                                int age) {
+        if (!properties.ai().configured() || dataUrls.isEmpty()) {
+            return Optional.empty();
+        }
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", """
+                Ты эксперт BodyLab по внешности, стилю, фото, уходу и привычкам.
+                Раздел: %s.
+                Что оцениваем: %s
+                Метрики: %s
+                Базовые действия: %s
+                Проанализируй фото бережно, конкретно и без медицинских формулировок.
+                Верни строго JSON без markdown:
+                {"score":0,"title":"...","headline":"...","summary":"...",
+                "metrics":[{"name":"...","value":0,"hint":"..."}],
+                "tasks":["..."],"planText":"..."}
+                Пол: %s. Возраст: %d.
+                """.formatted(title, text, String.join(", ", metricNames), String.join("; ", tasks), gender, age)));
+        for (String dataUrl : dataUrls) {
+            content.add(Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)));
+        }
+        Map<String, Object> request = Map.of(
+                "model", "gemini-2.5-flash",
+                "stream", false,
+                "temperature", BigDecimal.valueOf(0.45),
+                "messages", List.of(Map.of("role", "user", "content", content))
+        );
+        try {
+            String response = postKie(request);
+            String contentText = objectMapper.readTree(response)
+                    .path("choices").path(0).path("message").path("content").asText();
+            return Optional.of(objectMapper.readTree(stripCodeBlock(contentText)));
+        } catch (Exception ex) {
+            log.warn("Kie.ai tool analysis failed: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     private void streamKie(OutputStreamWriter writer, UserProfile user, String message, List<ChatMessage> history) throws Exception {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", """

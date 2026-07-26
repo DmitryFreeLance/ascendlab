@@ -95,7 +95,7 @@ public class AppController {
                 feature("style", "Стиль", "Style Guide", "sparkles"),
                 feature("photo", "Фото-профиль", "Свет и ракурсы", "aperture"),
                 feature("wardrobe", "Гардероб", "Силуэт и цвета", "shirt"),
-                feature("gpt", "BodyGPT", "AI-ассистент", "brain"),
+                feature("gpt", "BodyGPT", "Личный помощник", "brain"),
                 feature("food", "Питание", "Дневник КБЖУ", "utensils"),
                 feature("academy", "Академия", "Гайды", "graduation-cap"),
                 feature("looks", "Похож на", "Looks Like", "user-search"),
