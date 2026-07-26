@@ -203,62 +203,19 @@ const toolWorkspaces = {
     }
 };
 
-const academyPhotoBank = {
-    skin: [
-        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
-    ],
-    hair: [
-        "https://images.unsplash.com/photo-1588349297539-6915a426001e?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=82"
-    ],
-    brows: [
-        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
-    ],
-    style: [
-        "https://images.unsplash.com/photo-1775036423024-a9aaea2a6254?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82"
-    ],
-    posture: [
-        "https://images.unsplash.com/photo-1605296867304-46d5465a13f1?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1626082787732-44e4e8cf9893?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
-    ],
-    photo: [
-        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82"
-    ],
-    body: [
-        "https://images.unsplash.com/photo-1605296867304-46d5465a13f1?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1626082787732-44e4e8cf9893?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82"
-    ],
-    hard: [
-        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=82",
-        "https://images.unsplash.com/photo-1694712301331-8e80efbd484a?auto=format&fit=crop&w=1200&q=82"
-    ]
-};
-
 const guideCategories = [
-    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets", image: academyGuideImage("skin", 0) },
-    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors", image: academyGuideImage("hair", 0) },
-    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye", image: academyGuideImage("brows", 0) },
-    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles", image: academyGuideImage("style", 0) },
-    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity", image: academyGuideImage("posture", 0) },
-    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture", image: academyGuideImage("photo", 0) },
-    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot", image: academyGuideImage("jaw", 0) },
-    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile", image: academyGuideImage("ortho", 0) },
-    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line", image: academyGuideImage("bite", 0) },
-    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert", image: academyGuideImage("operations", 0) },
-    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus", image: academyGuideImage("implants", 0) },
-    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell", image: academyGuideImage("body", 0) }
+    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets" },
+    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors" },
+    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye" },
+    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles" },
+    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity" },
+    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture" },
+    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot" },
+    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile" },
+    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line" },
+    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert" },
+    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus" },
+    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell" }
 ];
 
 const guideSeeds = {
@@ -1035,7 +992,7 @@ function renderAcademy() {
     return `<section class="section-panel academy-home">
         <p class="eyebrow">Академия</p>
         <h1>Гайды</h1>
-        <p class="muted">Большие справочники с фото, чеклистами и конкретными правилами: уход, волосы, фото, тело, стиль и осознанные решения.</p>
+        <p class="muted">Большие справочники с чеклистами и конкретными правилами: уход, волосы, фото, тело, стиль и осознанные решения.</p>
         <div class="segmented guide-track-tabs">
             <button class="${state.guideTrack === "soft" ? "active" : ""}" data-guide-track="soft">Softmaxxing</button>
             <button class="${state.guideTrack === "hard" ? "active" : ""}" data-guide-track="hard">Hardmaxxing</button>
@@ -1064,13 +1021,10 @@ function renderGuideCategory(categoryId) {
             </div>
         </div>
         <div class="guide-list-grid">${guides.map(guide => `<article class="guide-list-card ${category.track === "hard" ? "hard" : ""}">
-            <img src="${guide.image}" alt="">
-            <div>
-                <span class="badge">${guide.tag}</span>
-                <h3>${guide.title}</h3>
-                <p class="muted">${guide.intro}</p>
-                <div class="guide-card-foot"><span><i data-lucide="heart"></i> ${guide.likes}</span><button class="button secondary" data-guide="${guide.id}">Открыть</button></div>
-            </div>
+            <span class="badge">${guide.tag}</span>
+            <h3>${guide.title}</h3>
+            <p class="muted">${guide.intro}</p>
+            <div class="guide-card-foot"><span><i data-lucide="heart"></i> ${guide.likes}</span><button class="button secondary" data-guide="${guide.id}">Открыть</button></div>
         </article>`).join("")}</div>
     </section>`;
 }
@@ -1078,7 +1032,6 @@ function renderGuideCategory(categoryId) {
 function renderGuideDetail(guide) {
     return `<section class="section-panel guide-detail">
         <button class="button quiet guide-back" data-action="back-guides"><i data-lucide="chevron-left"></i>${state.selectedGuideCategory ? "К списку" : "Все гайды"}</button>
-        <img class="guide-hero-image" src="${guide.image}" alt="">
         <p class="eyebrow">${guide.tag}</p>
         <h1>${guide.title}</h1>
         <p class="muted">${guide.intro}</p>
@@ -1106,8 +1059,8 @@ function guideProtocol(guide) {
             <li>На 8-й день сравни фото, отметки и самочувствие, затем попроси BodyGPT скорректировать следующий шаг.</li>
             <li>Если действие не даёт эффекта, меняй только один параметр: свет, продукт, калории, тренировочный объём или посадку вещи.</li>
         </ul>
-        <div class="guide-mini-photo-grid">
-            <img src="${guide.image}" alt="">
+        <div class="guide-control-card">
+            <span class="icon-shell"><i data-lucide="bookmark-check"></i></span>
             <div>
                 <p class="eyebrow">Контроль</p>
                 <h3>Сохрани правило</h3>
@@ -1132,7 +1085,6 @@ function makeGuide(category, title, index) {
         tag: category.tag,
         title,
         intro: guideIntroFor(category, title),
-        image: guideImageFor(category, index),
         likes: 1 + (index % 7),
         sections: guideSectionsFor(category, title)
     };
@@ -1158,15 +1110,6 @@ function guideIntroFor(category, title) {
         implants: "Что учитывать до любых необратимых решений и как думать о пропорциях."
     }[category.id] || "Практичный справочник BodyLab с чеклистами и контрольными действиями.";
     return `${title}. ${intro}`;
-}
-
-function guideImageFor(category, index) {
-    return academyGuideImage(category.id, index, category.track);
-}
-
-function academyGuideImage(categoryId, index = 0, track = "soft") {
-    const bank = academyPhotoBank[categoryId] || academyPhotoBank[track === "hard" ? "hard" : "skin"];
-    return bank[Math.abs(index) % bank.length];
 }
 
 function guideSectionsFor(category, title) {
@@ -2346,7 +2289,9 @@ async function waitForPaymentActivation(paymentId, plan, optimistic = false) {
     }
     await bootstrap();
     setPaymentBusy(false);
-    toast("Оплата принята. Если доступ не появился, открой мини-апп заново через 10 секунд.");
+    toast(optimistic
+        ? "Оплата принята. Если доступ не появился, открой мини-апп заново через 10 секунд."
+        : "Счёт создан. После оплаты доступ активируется автоматически.");
 }
 
 function setPaymentBusy(busy) {

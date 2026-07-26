@@ -2375,8 +2375,7 @@ h3 {
     overflow: hidden;
 }
 
-.guide-card img,
-.guide-hero-image {
+.guide-card img {
     width: 100%;
     border-radius: var(--radius);
     object-fit: cover;
@@ -2449,18 +2448,9 @@ h3 {
 
 .guide-list-card {
     display: grid;
-    grid-template-columns: 132px minmax(0, 1fr);
-    gap: 14px;
-    padding: 14px;
+    gap: 10px;
+    padding: 16px;
     overflow: hidden;
-}
-
-.guide-list-card img {
-    width: 132px;
-    height: 132px;
-    border-radius: var(--radius);
-    object-fit: cover;
-    box-shadow: var(--shadow-soft);
 }
 
 .guide-list-card h3 {
@@ -2496,10 +2486,6 @@ h3 {
     justify-self: start;
 }
 
-.guide-hero-image {
-    height: clamp(240px, 38svh, 420px);
-}
-
 .guide-section-list {
     display: grid;
     gap: 14px;
@@ -2527,24 +2513,21 @@ h3 {
         rgba(255, 255, 255, 0.70);
 }
 
-.guide-mini-photo-grid {
+.guide-control-card {
     display: grid;
-    grid-template-columns: 132px minmax(0, 1fr);
+    grid-template-columns: 54px minmax(0, 1fr);
     gap: 14px;
     align-items: center;
     margin-top: 16px;
-}
-
-.guide-mini-photo-grid img {
-    width: 132px;
-    height: 132px;
     border-radius: var(--radius);
-    object-fit: cover;
+    padding: 14px;
+    border: 1px solid rgba(100, 224, 176, 0.26);
+    background: rgba(255, 255, 255, 0.58);
     box-shadow: var(--shadow-soft);
 }
 
-.guide-mini-photo-grid h3,
-.guide-mini-photo-grid p {
+.guide-control-card h3,
+.guide-control-card p {
     margin-bottom: 6px;
 }
 
@@ -4099,14 +4082,6 @@ h3 {
         min-height: clamp(360px, 56svh, 480px);
     }
 
-    .guide-card img {
-        height: 210px;
-    }
-
-    .guide-hero-image {
-        height: 260px;
-    }
-
     .guide-category-card {
         grid-template-columns: 54px minmax(0, 1fr);
         align-items: start;
@@ -4125,14 +4100,8 @@ h3 {
     }
 
     .guide-list-card {
-        grid-template-columns: 102px minmax(0, 1fr);
         gap: 12px;
         padding: 12px;
-    }
-
-    .guide-list-card img {
-        width: 102px;
-        height: 126px;
     }
 
     .guide-list-card p {
@@ -4149,13 +4118,8 @@ h3 {
         padding-inline: 14px;
     }
 
-    .guide-mini-photo-grid {
+    .guide-control-card {
         grid-template-columns: 1fr;
-    }
-
-    .guide-mini-photo-grid img {
-        width: 100%;
-        height: 210px;
     }
 
     .analysis-score-card h1 {
