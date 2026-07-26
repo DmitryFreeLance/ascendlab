@@ -36,7 +36,7 @@ public class ChatUsageService {
         ChatUsage current = status(telegramId);
         if (current.remaining() <= 0) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-                    "Лимит BodyGPT на сегодня исчерпан: 100 сообщений. Новый лимит откроется после 04:00 МСК.");
+                    "Лимит BodyGPT на сегодня исчерпан: 100 сообщений. Новый лимит откроется завтра.");
         }
         int updated = jdbc.update("""
                 UPDATE chat_usage

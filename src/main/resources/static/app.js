@@ -14,6 +14,7 @@ const CHAT_PUNCTUATION_DELAY = 132;
 const BODYGPT_DAILY_LIMIT = 100;
 const BODYLAB_DAY_SHIFT_MS = 60 * 60 * 1000;
 let planClockTimer = null;
+let chatScrollFrame = null;
 
 function apiPath(path) {
     return `${APP_BASE_PATH}${path}`;
@@ -32,11 +33,14 @@ const state = {
     chatUsage: { limit: BODYGPT_DAILY_LIMIT, used: 0, remaining: BODYGPT_DAILY_LIMIT },
     accessNotice: null,
     pendingAccessPlan: null,
-    busy: { analysis: false, meal: false, chat: false, payment: false, battle: false },
+    busy: { analysis: false, body: false, meal: false, chat: false, payment: false, battle: false },
     planReports: {},
     selectedPlanDay: null,
     selectedGuide: null,
     bodyProfile: null,
+    bodyAnalysis: null,
+    bodyHistory: [],
+    analysisHistory: [],
     battleOpponent: "neo",
     battleResult: null,
     battleHistory: [],
@@ -49,7 +53,7 @@ const planPhases = [
     {
         from: 1,
         to: 7,
-        title: "База и диагностика",
+        title: "База и привычки",
         accent: "Стабилизировать кожу, сон, воду и контрольные фото.",
         tasks: ["Утренний уход: очищение, увлажнение, SPF", "2 литра воды или личная норма", "Сон 7+ часов", "Контрольное фото при дневном свете"]
     },
@@ -87,7 +91,7 @@ const nav = [
     ["features", "Все функции", "layout-grid"],
     ["battle", "MogBattle", "swords"],
     ["analysis", "Анализ лица", "scan-face"],
-    ["body", "Body Max", "dumbbell"],
+    ["body", "Body Max", "activity"],
     ["plan", "Персональный план", "calendar-days"],
     ["gpt", "BodyGPT", "brain"],
     ["nutrition", "Питание", "utensils"],
@@ -439,7 +443,7 @@ function renderDashboard() {
             <div>
                 <p class="eyebrow">Лаборатория внешности</p>
                 <h1>${active ? "Продолжаем прокачку" : "Готов стать заметнее?"}</h1>
-                <p class="muted">${active ? `Сегодня день ${today} из 60. Фокус: ${phase.accent}` : "Начни с анализа лица, затем открой BodyGPT и персональный план на 60 дней."}</p>
+                <p class="muted">${active ? `День ${today} из 60. Фокус: ${phase.accent}` : "Начни с анализа лица, затем открой BodyGPT и персональный план на 60 дней."}</p>
             </div>
             <div class="grid two">
                 <button class="button primary" data-view="analysis"><i data-lucide="scan-face"></i>Сделать анализ</button>
@@ -461,7 +465,7 @@ function renderDashboard() {
     </section>` : ""}
     <section class="section-panel">
         <p class="eyebrow">Пульс BodyLab</p>
-        <h2>Система на сегодня</h2>
+        <h2>Пульс дня</h2>
         ${metric("Кожа", 72)}
         ${metric("Сон", active ? 82 : 41)}
         ${metric("Стиль", 66)}
@@ -512,7 +516,7 @@ function renderAnalysis() {
             ${uploadTile("front", "Анфас", "хорошее освещение")}
             ${uploadTile("side", "Профиль", "по желанию")}
         </div>
-        <button class="button primary" data-action="run-analysis" ${state.busy.analysis ? "disabled" : ""}>${buttonContent("Оценить лицо", "Сканирую...", "scan-line", state.busy.analysis)}</button>
+        <button class="button primary ${state.busy.analysis ? "processing" : ""}" data-action="run-analysis" ${state.busy.analysis ? "disabled" : ""}>${buttonContent("Оценить лицо", "Сканирую...", "scan-line", state.busy.analysis)}</button>
     </section>
     ${result ? renderAnalysisResult(result) : ""}
     <section class="section-panel">
@@ -529,6 +533,7 @@ function renderAnalysisResult(result) {
     const routine = Array.isArray(result.routine) ? result.routine.filter(Boolean).slice(0, 5) : [];
     const style = Array.isArray(result.style) ? result.style.filter(Boolean).slice(0, 8) : [];
     const score = Math.max(0, Math.min(100, Number(result.score) || 0));
+    const comparison = result.comparison || scanComparison(state.analysisHistory[1], result, "face");
     return `<section class="section-panel analysis-result">
         <div class="analysis-score-card">
             <div class="score-orbit" style="--score:${score}">
@@ -543,6 +548,7 @@ function renderAnalysisResult(result) {
         <div class="analysis-metrics">
             ${metrics.map(analysisMetric).join("")}
         </div>
+        ${renderScanComparison(comparison)}
         ${zones.length ? `<div class="analysis-zone-grid">${zones.map(analysisZone).join("")}</div>` : ""}
         ${routine.length || style.length ? `<div class="analysis-next-grid">
             ${routine.length ? `<article class="analysis-plan-card">
@@ -550,10 +556,11 @@ function renderAnalysisResult(result) {
                 <h3>Первые действия</h3>
                 <ol class="routine-list">${routine.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
             </article>` : ""}
-            ${style.length ? `<article class="analysis-plan-card">
+            ${style.length ? `<article class="analysis-plan-card style-advice-card">
                 <p class="eyebrow">Подача</p>
                 <h3>Цвета и стиль</h3>
                 <div class="style-token-list">${style.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+                <p class="muted">Выбери 1-2 оттенка для следующего фото и не смешивай их с лишними акцентами.</p>
             </article>` : ""}
         </div>` : ""}
         <div class="analysis-followup">
@@ -586,20 +593,34 @@ function analysisZone(zone) {
 function renderBodyMax() {
     if (!isPro()) return renderLockedFeature("Body Max", "Оценка формы тела, цель по массе или похудению и недельный план открываются с BodyPro.");
     const profile = bodyProfile();
-    const assessment = bodyAssessment(profile);
+    const baseAssessment = bodyAssessment(profile);
+    const assessment = state.bodyAnalysis ? {
+        ...baseAssessment,
+        score: state.bodyAnalysis.score,
+        title: state.bodyAnalysis.title,
+        summary: baseAssessment.summary,
+        comparison: state.bodyAnalysis.comparison,
+        createdAt: state.bodyAnalysis.createdAt
+    } : null;
     return `<section class="section-panel body-max">
         <p class="eyebrow">Body Max</p>
         <h1>Форма тела</h1>
-        <p class="muted">Оцени текущую форму, выбери цель и получи практичный план: калории, белок, тренировки и контроль прогресса.</p>
+        <p class="muted">Загрузи фото формы, выбери цель и получи план по питанию, тренировкам и контрольным замерам.</p>
         <div class="upload-grid">
             ${uploadTile("body", "Фото тела", "прямо, без сильного ракурса")}
-            <div class="body-score-card">
+            ${assessment ? `<div class="body-score-card">
                 <div class="score-orbit" style="--score:${assessment.score}">
                     <div class="score-center"><strong>${assessment.score}</strong><span>/100</span></div>
                 </div>
+                <p class="eyebrow">Текущая оценка тела</p>
                 <strong>${assessment.title}</strong>
                 <p class="muted">${assessment.summary}</p>
-            </div>
+            </div>` : `<div class="body-score-card empty">
+                <span class="icon-shell"><i data-lucide="scan-line"></i></span>
+                <p class="eyebrow">Текущая оценка тела</p>
+                <strong>Ждёт фото</strong>
+                <p class="muted">После оценки здесь появится балл, выводы и обновлённый план.</p>
+            </div>`}
         </div>
         <div class="body-goals">
             ${[
@@ -614,11 +635,20 @@ function renderBodyMax() {
             <label>Талия, см<input id="bodyWaist" inputmode="decimal" value="${profile.waist}"></label>
             <label>Тренировок/нед.<input id="bodyWorkouts" inputmode="numeric" value="${profile.workouts}"></label>
         </div>
-        <button class="button primary" data-action="save-body-profile"><i data-lucide="dumbbell"></i>Собрать план тела</button>
+        <button class="button primary ${state.busy.body ? "processing" : ""}" data-action="run-body-analysis" ${state.busy.body ? "disabled" : ""}>${buttonContent("Оценить форму", "Оцениваю форму...", "scan-line", state.busy.body)}</button>
     </section>
-    <section class="section-panel">
+    ${assessment ? renderBodyResult(assessment) : `<section class="section-panel body-plan-empty">
+        <p class="eyebrow">План тела</p>
+        <h2>Сначала оценка</h2>
+        <p class="muted">План тренировок и питания появится после первого фото формы.</p>
+    </section>`}`;
+}
+
+function renderBodyResult(assessment) {
+    return `<section class="section-panel body-result">
         <p class="eyebrow">План под цель</p>
         <h2>${assessment.planTitle}</h2>
+        ${renderScanComparison(assessment.comparison)}
         <div class="grid three body-kpis">
             <div class="stat-card"><small>Калории</small><strong>${assessment.calories}</strong><em>ккал/день</em></div>
             <div class="stat-card"><small>Белок</small><strong>${assessment.protein}</strong><em>г/день</em></div>
@@ -626,9 +656,9 @@ function renderBodyMax() {
         </div>
         <div class="analysis-next-grid">
             <article class="analysis-plan-card">
-                <p class="eyebrow">Тренировки</p>
+                <p class="eyebrow">Неделя</p>
                 <h3>${assessment.trainingTitle}</h3>
-                <ol class="routine-list">${assessment.training.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+                <div class="training-week">${assessment.trainingDays.map(trainingDayCard).join("")}</div>
             </article>
             <article class="analysis-plan-card">
                 <p class="eyebrow">Контроль</p>
@@ -637,6 +667,20 @@ function renderBodyMax() {
             </article>
         </div>
     </section>`;
+}
+
+function trainingDayCard(day) {
+    return `<div class="training-day-card">
+        <div class="training-day-head">
+            <strong>${escapeHtml(day.day)}</strong>
+            <span>${escapeHtml(day.focus)}</span>
+        </div>
+        <div class="exercise-list">${day.exercises.map(exercise => `<div class="exercise-row">
+            <b>${escapeHtml(exercise.name)}</b>
+            <em>${escapeHtml(exercise.sets)}</em>
+            <small>${escapeHtml(exercise.technique)}</small>
+        </div>`).join("")}</div>
+    </div>`;
 }
 
 function renderToolWorkspace(id) {
@@ -697,7 +741,9 @@ function renderPlan() {
         <div>
             <p class="eyebrow">60 дней</p>
             <h1>Дневной маршрут</h1>
-            <p class="muted">Маршрут сам переключается каждый день в 04:00 по Москве. Листать можно вручную, но отчёт сохраняется только за текущий день.</p>
+            <div class="phase-pills">${planPhases.map(item => `<button class="phase-pill ${day >= item.from && day <= item.to ? "active" : ""}" data-plan-day="${item.from}">
+                <span>${item.from}-${item.to}</span>${escapeHtml(item.title)}
+            </button>`).join("")}</div>
         </div>
         <div class="plan-radar" style="--progress:${progress}">
             <div class="plan-radar-center"><strong>${progress}%</strong><span>по отчётам</span></div>
@@ -709,11 +755,11 @@ function renderPlan() {
             <div>
                 <p class="eyebrow">${phase.title}</p>
                 <h2>День ${day}</h2>
-                <p class="muted">${planDayLabel(day)} · ${day === today ? "сегодня" : day < today ? "прошедший день" : "будущий день"}. ${phase.accent}</p>
+                <p class="muted">${dayStatusLabel(day, today)}. ${phase.accent}</p>
             </div>
             <button class="icon-button ghost" data-plan-day="${Math.min(60, day + 1)}" ${day >= 60 ? "disabled" : ""} aria-label="Следующий день"><i data-lucide="chevron-right"></i></button>
         </div>
-        ${canEdit ? `<div class="coach-card"><i data-lucide="sparkles"></i><div><strong>Сегодня BodyLab ведёт тебя по этому блоку</strong><p class="muted">Отметь выполненное, добавь короткий отчёт вечером и вернись завтра после 04:00 МСК.</p></div></div>` : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>Отчёт заблокирован</strong><p class="muted">${day < today ? "Прошедшие дни доступны только для просмотра." : "Будущие дни можно смотреть заранее, но отметки откроются в свой день."}</p></div></div>`}
+        ${canEdit ? `<div class="coach-card"><i data-lucide="sparkles"></i><div><strong>Фокус дня</strong><p class="muted">Отметь выполненное и вечером добавь короткий отчёт. Следующий шаг откроется завтра.</p></div></div>` : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>Только просмотр</strong><p class="muted">${day < today ? "Этот день уже закрыт для отчёта." : "Этот день можно посмотреть заранее, а отметки откроются позже."}</p></div></div>`}
         <div class="day-progress-line"><span style="width:${Math.round((done / phase.tasks.length) * 100)}%"></span></div>
         <div class="task-list">
             ${phase.tasks.map((task, index) => `<label class="task-item ${report.tasks[index] ? "done" : ""}">
@@ -733,13 +779,7 @@ function renderPlan() {
         <h2>Последние дни</h2>
         <div class="report-list">${renderPlanReportList()}</div>
     </section>
-    <section class="section-panel">
-        <p class="eyebrow">Карта этапов</p>
-        <div class="timeline">${planPhases.map(phase => `<button class="timeline-step ${day >= phase.from && day <= phase.to ? "active" : ""}" data-plan-day="${phase.from}">
-            <h3>Дни ${phase.from}-${phase.to}</h3>
-            <p class="muted">${phase.accent}</p>
-        </button>`).join("")}</div>
-    </section>`;
+    `;
 }
 
 function renderGpt() {
@@ -751,7 +791,7 @@ function renderGpt() {
     return `<section class="section-panel chat-window">
         <div class="assistant-head">
             <span class="brand-mark">AI</span>
-            <div><h3>BodyGPT</h3><p class="eyebrow" style="margin:0">${isPro() ? "ведёт маршрут" : "на связи"}</p></div>
+            <div><h3>BodyGPT</h3><p class="eyebrow" style="margin:0">${isPro() ? "личный помощник" : "на связи"}</p></div>
             <span class="chat-quota ${usage.remaining <= 10 ? "low" : ""}">${usage.used}/${usage.limit}</span>
         </div>
         <div class="chat-list" id="chatList">${state.chat.map(chatMessageHtml).join("")}</div>
@@ -768,16 +808,11 @@ function renderNutrition() {
     return `<section class="section-panel">
         <p class="eyebrow">Питание</p>
         <h1>Дневник КБЖУ</h1>
-        <p class="muted">Считай калории и макросы, получай AI-советы по рациону.</p>
+        <p class="muted">Считай калории и БЖУ, добавляй приёмы пищи и получай советы по рациону.</p>
         <div class="nutrition-ring"><div><strong>${data.calories}</strong><span class="muted"> / ${data.targetCalories} ккал</span></div></div>
         ${metric("Белки", pct(data.protein, 150), `${data.protein} г`)}
         ${metric("Жиры", pct(data.fat, 70), `${data.fat} г`)}
         ${metric("Углеводы", pct(data.carbs, 250), `${data.carbs} г`)}
-        <div class="water-buttons">
-            <button class="button quiet">+250</button>
-            <button class="button quiet">+500</button>
-            <button class="button quiet">+1 л</button>
-        </div>
     </section>
     <section class="section-panel">
         <h2>Добавить приём пищи</h2>
@@ -787,8 +822,8 @@ function renderNutrition() {
                 return `<button data-value="${value}" class="${state.mealType === value ? "active" : ""}">${label}</button>`;
             }).join("")}</div>
             <input class="meal-input" id="mealInput" placeholder="Напр.: 2 яйца, тост с авокадо">
-            <button class="button primary" data-action="add-meal" ${state.busy.meal ? "disabled" : ""}>${buttonContent("Оценить и добавить", "Считаю КБЖУ...", "wand-sparkles", state.busy.meal)}</button>
-            ${state.busy.meal ? `<div class="coach-card"><span class="mini-loader"></span><div><strong>Разбираю приём пищи</strong><p class="muted">Считаю калории и макросы, затем сразу добавлю запись в дневник.</p></div></div>` : ""}
+            <button class="button primary ${state.busy.meal ? "processing" : ""}" data-action="add-meal" ${state.busy.meal ? "disabled" : ""}>${buttonContent("Оценить и добавить", "Считаю КБЖУ...", "wand-sparkles", state.busy.meal)}</button>
+            ${state.busy.meal ? `<div class="coach-card"><span class="mini-loader"></span><div><strong>Разбираю приём пищи</strong><p class="muted">Считаю калории и БЖУ, затем добавлю запись в дневник.</p></div></div>` : ""}
             <div class="zone-list">${(data.logs || []).map(log => `<div class="zone-card"><strong>${escapeHtml(log.title)}<em>${log.calories} ккал</em></strong><p class="muted">Б ${log.protein} · Ж ${log.fat} · У ${log.carbs}</p></div>`).join("")}</div>
         </div>
     </section>`;
@@ -834,7 +869,7 @@ function renderGuideDetail(guide) {
 function guideProtocol(guide) {
     return `<article class="guide-section guide-protocol">
         <h2>Как внедрять без хаоса</h2>
-        <p>Главная ошибка — пытаться поменять всё за один вечер. BodyLab ведёт иначе: маленькие действия, контрольные фото, отчётность и корректировка по факту. Так результат становится видимым и не разваливается через неделю.</p>
+        <p>Главная ошибка — пытаться поменять всё за один вечер. Работай мягче: маленькие действия, контрольные фото, отчётность и корректировка по факту. Так результат становится видимым и не разваливается через неделю.</p>
         <ul class="guide-list">
             <li>Выбери один главный фокус из гайда и внеси его в сегодняшний маршрут.</li>
             <li>Сделай базовое фото или заметку “до”, чтобы видеть не ощущения, а разницу.</li>
@@ -886,7 +921,7 @@ function renderBattle() {
         <div class="opponent-strip">${battleOpponents.map(item => `<button class="opponent-chip ${item.id === opponent.id ? "active" : ""}" data-battle-opponent="${item.id}">
             <img src="${item.image}" alt=""><span>${item.name}</span><small>${item.score}/100</small>
         </button>`).join("")}</div>
-        <button class="button primary" data-action="run-battle" ${state.busy.battle ? "disabled" : ""}>${buttonContent("Запустить баттл", "Сравниваю...", "swords", state.busy.battle)}</button>
+        <button class="button primary ${state.busy.battle ? "processing" : ""}" data-action="run-battle" ${state.busy.battle ? "disabled" : ""}>${buttonContent("Запустить баттл", "Сравниваю...", "swords", state.busy.battle)}</button>
         ${state.battleResult ? renderBattleResult() : ""}
         <div class="zone-list">${state.battleHistory.slice(0, 4).map(item => `<div class="zone-card"><strong>${escapeHtml(item.name)}<em>${item.result === "win" ? "победа" : item.result === "tie" ? "ничья" : "поражение"}</em></strong><p class="muted">${item.ownScore} vs ${item.opponentScore} · ELO ${item.eloDelta > 0 ? "+" : ""}${item.eloDelta}</p></div>`).join("")}</div>
     </section>`;
@@ -1159,7 +1194,7 @@ function uploadTile(kind, title, subtitle) {
     const file = state.files[kind];
     const preview = state.previews[kind];
     const hasImage = Boolean(file || preview);
-    const icon = kind === "front" ? "camera" : kind === "body" ? "dumbbell" : "scan";
+    const icon = kind === "front" ? "camera" : kind === "body" ? "scan-line" : "scan";
     return `<label class="upload-tile ${hasImage ? "has-file" : ""}">
         ${preview ? `<img class="upload-preview" src="${preview}" alt="">` : ""}
         <input type="file" accept="image/png,image/jpeg" data-file="${kind}">
@@ -1196,6 +1231,10 @@ function bindView() {
         state.files[kind] = file;
         state.previews[kind] = file ? URL.createObjectURL(file) : null;
         if (!file) localStorage.removeItem(storageKey(`preview-${kind}`));
+        if (kind === "body") {
+            state.bodyAnalysis = null;
+            saveBodyState();
+        }
         render();
         if (file) {
             persistPreview(kind, file);
@@ -1211,7 +1250,9 @@ function bindView() {
         const profile = bodyProfileFromInputs();
         profile.goal = button.dataset.goal;
         state.bodyProfile = profile;
+        state.bodyAnalysis = null;
         saveBodyProfile();
+        saveBodyState();
         render();
     }));
     document.querySelector("#chatForm")?.addEventListener("submit", event => {
@@ -1236,7 +1277,7 @@ function bindView() {
     }));
     document.querySelectorAll("[data-plan-mood]").forEach(button => button.addEventListener("click", () => {
         if (!canEditPlanDay(selectedPlanDay())) {
-            toast("Настроение можно менять только за сегодняшний день.");
+            toast("Настроение можно менять только сегодня.");
             render();
             return;
         }
@@ -1255,6 +1296,7 @@ function bindView() {
 
 async function handleAction(event) {
     const action = event.currentTarget.dataset.action;
+    blurActiveInput();
     if (action === "skip-onboarding") {
         finishOnboarding();
     }
@@ -1286,6 +1328,9 @@ async function handleAction(event) {
     }
     if (action === "save-body-profile") {
         saveBodyProfileFromView();
+    }
+    if (action === "run-body-analysis") {
+        await runBodyAnalysis();
     }
     if (action === "back-guides") {
         state.selectedGuide = null;
@@ -1372,6 +1417,7 @@ async function runAnalysis() {
         return;
     }
     try {
+        const previous = state.analysis;
         state.busy.analysis = true;
         render();
         toast("Сканирую фото...");
@@ -1382,7 +1428,9 @@ async function runAnalysis() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Не удалось провести анализ");
+        data.comparison = scanComparison(previous, data, "face");
         state.analysis = data;
+        state.analysisHistory = [compactScan(data), ...state.analysisHistory].slice(0, 8);
         ensurePlanStartKey();
         state.selectedPlanDay = currentPlanDay();
         saveAnalysis();
@@ -1396,6 +1444,42 @@ async function runAnalysis() {
     }
 }
 
+async function runBodyAnalysis() {
+    if (state.busy.body) return;
+    const hasPhoto = Boolean(state.files.body || state.previews.body);
+    state.bodyProfile = bodyProfileFromInputs();
+    saveBodyProfile();
+    if (!hasPhoto) {
+        render();
+        toast("Сначала загрузи фото формы.");
+        return;
+    }
+    try {
+        const previous = state.bodyAnalysis || state.bodyHistory[0] || null;
+        state.busy.body = true;
+        render();
+        toast("Оцениваю форму...");
+        await delay(820);
+        const assessment = bodyAssessment(state.bodyProfile);
+        const result = {
+            ...assessment,
+            profile: state.bodyProfile,
+            comparison: scanComparison(previous, assessment, "body"),
+            createdAt: new Date().toISOString()
+        };
+        state.bodyAnalysis = result;
+        state.bodyHistory = [compactScan(result), ...state.bodyHistory].slice(0, 8);
+        saveBodyState();
+        render();
+        toast(previous ? "Оценка обновлена." : "Оценка формы готова.");
+    } catch (error) {
+        toast(error.message);
+    } finally {
+        state.busy.body = false;
+        render();
+    }
+}
+
 async function sendChat(text) {
     if (state.busy.chat) return;
     const message = (text || "").trim();
@@ -1403,7 +1487,7 @@ async function sendChat(text) {
     blurActiveInput();
     const usage = chatUsageView();
     if (isPro() && usage.remaining <= 0) {
-        toast("Лимит BodyGPT на сегодня исчерпан: 100 сообщений. Новый лимит откроется после 04:00 МСК.");
+        toast("Лимит BodyGPT на сегодня исчерпан: 100 сообщений. Новый лимит откроется завтра.");
         return;
     }
     const history = chatHistoryForAi();
@@ -1413,7 +1497,7 @@ async function sendChat(text) {
     state.busy.chat = true;
     saveChatHistory();
     render();
-    scrollChatToBottom();
+    scrollChatToBottom(true);
     const typer = createTypingRenderer(assistant);
     try {
         const response = await fetch(apiPath("/api/chat/stream"), {
@@ -1442,7 +1526,7 @@ async function sendChat(text) {
         assistant.text = error.message;
         saveChatHistory();
         render();
-        scrollChatToBottom();
+        scrollChatToBottom(true);
     } finally {
         assistant.pending = false;
         state.busy.chat = false;
@@ -1767,10 +1851,17 @@ function loadLocalState() {
     state.chat = readJson(storageKey("chat"), []);
     state.planReports = readJson(storageKey("plan-reports"), {});
     state.analysis = readJson(storageKey("analysis"), null);
+    state.analysisHistory = readJson(storageKey("analysis-history"), []);
     state.previews.front = localStorage.getItem(storageKey("preview-front")) || null;
     state.previews.side = localStorage.getItem(storageKey("preview-side")) || null;
     state.previews.body = localStorage.getItem(storageKey("preview-body")) || null;
     state.bodyProfile = readJson(storageKey("body-profile"), null);
+    state.bodyAnalysis = readJson(storageKey("body-analysis"), null);
+    state.bodyHistory = readJson(storageKey("body-history"), []);
+    if (!state.previews.body) {
+        state.bodyAnalysis = null;
+        state.bodyHistory = [];
+    }
     state.selectedPlanDay = defaultPlanDay();
     const battle = readJson(storageKey("battle"), {});
     state.battleOpponent = battleOpponents.some(item => item.id === battle.opponent) ? battle.opponent : state.battleOpponent;
@@ -1841,6 +1932,14 @@ function saveChatHistory() {
 function saveAnalysis() {
     if (!state.boot?.user || !state.analysis) return;
     localStorage.setItem(storageKey("analysis"), JSON.stringify(state.analysis));
+    localStorage.setItem(storageKey("analysis-history"), JSON.stringify(state.analysisHistory));
+}
+
+function saveBodyState() {
+    if (!state.boot?.user) return;
+    if (state.bodyAnalysis) localStorage.setItem(storageKey("body-analysis"), JSON.stringify(state.bodyAnalysis));
+    else localStorage.removeItem(storageKey("body-analysis"));
+    localStorage.setItem(storageKey("body-history"), JSON.stringify(state.bodyHistory));
 }
 
 function chatHistoryForAi() {
@@ -1897,7 +1996,13 @@ function addDaysKey(startKey, days) {
 function planDayLabel(day) {
     const key = addDaysKey(ensurePlanStartKey(), day - 1);
     const [, month, date] = key.split("-");
-    return `${date}.${month} по МСК`;
+    return `${date}.${month}`;
+}
+
+function dayStatusLabel(day, today) {
+    if (day === today) return "Сегодняшний фокус";
+    if (day < today) return "Прошедший день";
+    return "Следующий этап";
 }
 
 function canEditPlanDay(day) {
@@ -1950,7 +2055,7 @@ function planReport(day) {
 function togglePlanTask(index, checked) {
     const day = selectedPlanDay();
     if (!canEditPlanDay(day)) {
-        toast("Отчёт можно менять только за сегодняшний день.");
+        toast("Отчёт можно менять только сегодня.");
         render();
         return;
     }
@@ -1965,7 +2070,7 @@ function togglePlanTask(index, checked) {
 function savePlanReport() {
     const day = selectedPlanDay();
     if (!canEditPlanDay(day)) {
-        toast("Отчёт можно сохранить только за сегодняшний день.");
+        toast("Отчёт можно сохранить только сегодня.");
         return;
     }
     const report = planReport(day);
@@ -2133,9 +2238,16 @@ function chatCharDelay(char) {
     return CHAT_TYPE_DELAY + Math.round(Math.random() * 12);
 }
 
-function scrollChatToBottom() {
+function scrollChatToBottom(force = false) {
     const list = document.querySelector("#chatList");
-    if (list) list.scrollTop = list.scrollHeight;
+    if (!list) return;
+    const distance = list.scrollHeight - list.scrollTop - list.clientHeight;
+    if (!force && distance > 180) return;
+    if (chatScrollFrame) cancelAnimationFrame(chatScrollFrame);
+    chatScrollFrame = requestAnimationFrame(() => {
+        list.scrollTop = list.scrollHeight;
+        chatScrollFrame = null;
+    });
 }
 
 function cleanAssistantText(text) {
@@ -2161,12 +2273,12 @@ function gptWelcomeText() {
     if (isPro() && state.analysis?.score) {
         const day = currentPlanDay();
         const firstFocus = (state.analysis.zones || [])[0]?.name || "первый фокус";
-        return `Я рядом и буду вести тебя по маршруту. Сегодня день ${day}: начнём с зоны “${firstFocus}”, отметим задачи дня и вечером зафиксируем короткий отчёт. Можешь спросить: “что делать прямо сейчас?”`;
+        return `Я рядом. День ${day}: начнём с зоны “${firstFocus}”, отметим задачи дня и вечером зафиксируем короткий отчёт. Можешь спросить: “что делать прямо сейчас?”`;
     }
     if (isPro()) {
-        return `Привет. Я BodyGPT — твой проводник по BodyLab. Сначала сделай анализ лица или Body Max, потом я буду связывать сканы, питание, тренировки и 60-дневный маршрут в конкретные шаги.`;
+        return `Привет. Я BodyGPT — твой помощник по внешности. Сначала сделай анализ лица или Body Max, потом я соберу сканы, питание, тренировки и привычки в конкретные шаги.`;
     }
-    return "Привет. Я BodyGPT — AI-ассистент по внешности. Полные ответы открываются с BodyPro.";
+    return "Привет. Я BodyGPT — личный помощник по внешности. Полные ответы открываются с BodyPro.";
 }
 
 function chatUsageView() {
@@ -2192,6 +2304,97 @@ function isPro() {
 
 function pct(value, target) {
     return Math.round(Math.max(0, Math.min(100, (value / target) * 100)));
+}
+
+function compactScan(scan) {
+    if (!scan) return null;
+    return {
+        score: Math.max(0, Math.min(100, Number(scan.score) || 0)),
+        title: scan.title || "",
+        summary: scan.summary || "",
+        metrics: Array.isArray(scan.metrics) ? scan.metrics.slice(0, 8) : [],
+        createdAt: scan.createdAt || new Date().toISOString()
+    };
+}
+
+function scanComparison(previous, current, type) {
+    if (!current) return null;
+    const currentScore = Math.max(0, Math.min(100, Number(current.score) || 0));
+    if (!previous?.score) {
+        return {
+            kind: "first",
+            title: "Точка отсчёта",
+            delta: 0,
+            summary: type === "body"
+                ? "Сохрани эту оценку как старт. Следующий скан покажет изменения по форме, талии, массе и регулярности тренировок."
+                : "Сохрани этот результат как старт. Следующий скан покажет, что изменилось в коже, контуре, фото и подаче.",
+            better: [],
+            attention: [],
+            planShift: "Первый фокус уже добавлен в ближайшие действия."
+        };
+    }
+    const previousScore = Math.max(0, Math.min(100, Number(previous.score) || 0));
+    const delta = currentScore - previousScore;
+    const currentMetrics = metricMap(current.metrics);
+    const previousMetrics = metricMap(previous.metrics);
+    const changes = Object.entries(currentMetrics)
+        .map(([name, value]) => ({ name, value, delta: value - (previousMetrics[name] ?? value) }))
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    const better = changes.filter(item => item.delta > 1).slice(0, 2);
+    const attention = changes.filter(item => item.delta < -1).slice(0, 2);
+    const focus = attention[0] || changes.find(item => item.value < 70) || changes[0];
+    return {
+        kind: delta > 1 ? "up" : delta < -1 ? "down" : "stable",
+        title: delta > 1 ? "Стало лучше" : delta < -1 ? "Нужно вернуть темп" : "Держишь уровень",
+        delta,
+        summary: comparisonSummary(delta, type),
+        better,
+        attention,
+        planShift: focus
+            ? `Фокус на ближайшие дни: ${focus.name.toLowerCase()}.`
+            : "План можно продолжать без резких изменений."
+    };
+}
+
+function metricMap(metrics) {
+    const map = {};
+    if (!Array.isArray(metrics)) return map;
+    metrics.forEach(item => {
+        const name = String(item.name || "").trim();
+        if (!name) return;
+        map[name] = Math.max(0, Math.min(100, Number(item.value) || 0));
+    });
+    return map;
+}
+
+function comparisonSummary(delta, type) {
+    const area = type === "body" ? "форма" : "внешность";
+    if (delta > 1) return `${area[0].toUpperCase()}${area.slice(1)} выглядит сильнее: общий балл вырос на ${delta}.`;
+    if (delta < -1) return `Общий балл снизился на ${Math.abs(delta)}. Это повод упростить план и вернуть базовые действия.`;
+    return "Серьёзного скачка нет, но стабильность тоже результат. Продолжай копить маленькие улучшения.";
+}
+
+function renderScanComparison(comparison) {
+    if (!comparison) return "";
+    const deltaText = comparison.delta > 0 ? `+${comparison.delta}` : String(comparison.delta || 0);
+    const better = Array.isArray(comparison.better) ? comparison.better : [];
+    const attention = Array.isArray(comparison.attention) ? comparison.attention : [];
+    return `<article class="scan-comparison ${comparison.kind || "stable"}">
+        <div class="scan-comparison-head">
+            <span class="icon-shell"><i data-lucide="${comparison.kind === "up" ? "trending-up" : comparison.kind === "down" ? "trending-down" : "activity"}"></i></span>
+            <div>
+                <p class="eyebrow">Динамика</p>
+                <h3>${escapeHtml(comparison.title)}</h3>
+            </div>
+            <strong>${deltaText}</strong>
+        </div>
+        <p class="muted">${escapeHtml(comparison.summary)}</p>
+        <div class="scan-change-grid">
+            <div><small>Лучше</small>${better.length ? better.map(item => `<span>${escapeHtml(item.name)} +${item.delta}</span>`).join("") : `<span>держится стабильно</span>`}</div>
+            <div><small>Внимание</small>${attention.length ? attention.map(item => `<span>${escapeHtml(item.name)} ${item.delta}</span>`).join("") : `<span>без резкой просадки</span>`}</div>
+        </div>
+        <div class="plan-adjustment"><i data-lucide="route"></i><span>${escapeHtml(comparison.planShift)}</span></div>
+    </article>`;
 }
 
 function bodyProfile() {
@@ -2243,20 +2446,78 @@ function bodyAssessment(profile) {
     const protein = Math.round(profile.weight * (profile.goal === "cut" ? 2.2 : 2));
     const title = score >= 82 ? "Сильная форма" : score >= 65 ? "Хорошая база" : "Нужна система";
     const goalTitle = profile.goal === "muscle" ? "Мягкий набор массы" : profile.goal === "cut" ? "Контролируемое похудение" : "Рекомпозиция";
+    const bodyFocus = profile.goal === "muscle"
+        ? "Фокус: прогресс в упражнениях, регулярный белок и спокойный набор без лишней спешки."
+        : profile.goal === "cut"
+            ? "Фокус: ровный дефицит, шаги, белок и контроль талии без резких откатов."
+            : "Фокус: держать вес спокойнее, усиливать силуэт и постепенно подтягивать режим.";
     return {
         score,
         title,
-        summary: `BMI ${bmi.toFixed(1)}, талия/рост ${(waistRatio * 100).toFixed(0)}%. Цель: ${goalTitle.toLowerCase()}.`,
+        summary: `${goalTitle}. ${bodyFocus}`,
+        metrics: [
+            { name: "Силуэт", value: Math.round(Math.max(35, Math.min(96, waistScore * 0.72 + bmiScore * 0.28))) },
+            { name: "Масса", value: Math.round(Math.max(35, Math.min(96, bmiScore))) },
+            { name: "Режим", value: Math.round(workoutScore) }
+        ],
         planTitle: goalTitle,
         calories,
         protein,
         pace: profile.goal === "muscle" ? "+0.2-0.4 кг" : profile.goal === "cut" ? "-0.4-0.7 кг" : "стабильно",
-        trainingTitle: profile.workouts >= 4 ? "Upper / Lower" : "Full Body",
-        training: profile.workouts >= 4
-            ? ["День 1: верх, жим + тяга.", "День 2: низ, присед или жим ногами.", "День 3: верх, плечи + спина.", "День 4: низ, задняя цепь + корпус."]
-            : ["3 тренировки Full Body в неделю.", "В каждом дне: ноги, жим, тяга, корпус.", "Прогрессия: +1 повтор или +2.5 кг, когда техника чистая."],
+        trainingTitle: profile.workouts >= 4 ? "4 дня нагрузки" : "3 дня нагрузки",
+        trainingDays: trainingDaysFor(profile),
         tracking: ["Вес 3 раза в неделю, смотреть среднее.", "Талия утром 1 раз в неделю.", "Фото тела каждые 14 дней в одинаковом свете."]
     };
+}
+
+function trainingDaysFor(profile) {
+    const hard = profile.goal === "muscle";
+    const lean = profile.goal === "cut";
+    const base = [
+        {
+            day: "День 1",
+            focus: "Ноги + корпус",
+            exercises: [
+                { name: "Приседания", sets: hard ? "5 x 10-15" : "4 x 14-20", technique: "Колени смотрят туда же, куда носки; спина длинная; вниз спокойно, вверх мощно." },
+                { name: "Выпады назад", sets: "4 x 10 на ногу", technique: "Шаг назад мягкий, корпус ровный, передняя пятка не отрывается." },
+                { name: "Ягодичный мост", sets: "4 x 15-20", technique: "Вверху сожми ягодицы на секунду, поясницу не переразгибай." },
+                { name: "Планка", sets: lean ? "4 x 35-50 сек" : "3 x 35-45 сек", technique: "Рёбра подтянуты, таз не провисает, шея продолжает линию спины." }
+            ]
+        },
+        {
+            day: "День 2",
+            focus: "Грудь + спина",
+            exercises: [
+                { name: "Отжимания", sets: hard ? "5 x максимум - 2" : "4 x 8-15", technique: "Локти под углом, корпус одной линией, грудь идёт к полу." },
+                { name: "Лодочка", sets: "4 x 12-16", technique: "Поднимай грудь и ноги мягко, не зажимай шею, пауза наверху." },
+                { name: "Обратные снежные ангелы", sets: "3 x 10-14", technique: "Лопатки ведут движение, плечи не поднимай к ушам." },
+                { name: "Скручивания", sets: lean ? "4 x 16-24" : "3 x 12-18", technique: "Подбородок свободен, поясница прижата, движение короткое и контролируемое." }
+            ]
+        },
+        {
+            day: "День 3",
+            focus: "Силуэт + выносливость",
+            exercises: [
+                { name: "Сплит-присед", sets: "4 x 8-12 на ногу", technique: "Опускайся вертикально, переднее колено стабильно, темп ровный." },
+                { name: "Пайк-отжимания", sets: hard ? "4 x 6-10" : "3 x 6-10", technique: "Таз выше плеч, голова идёт к полу, локти не разваливаются." },
+                { name: "Альпинист", sets: lean ? "5 x 30 сек" : "4 x 25 сек", technique: "Корпус тихий, колено тянется к груди, не раскачивай таз." },
+                { name: "Боковая планка", sets: "3 x 25-40 сек на сторону", technique: "Локоть под плечом, корпус вытянут, таз не падает." }
+            ]
+        }
+    ];
+    if (profile.workouts >= 4) {
+        base.push({
+            day: "День 4",
+            focus: "Повтор слабых зон",
+            exercises: [
+                { name: "Медленные приседания", sets: "4 x 10-14", technique: "Три секунды вниз, пауза внизу, подъём без рывка." },
+                { name: "Отжимания узким упором", sets: "4 x 6-12", technique: "Локти ближе к корпусу, плечи опущены, корпус не ломается." },
+                { name: "Супермен с паузой", sets: "4 x 10-14", technique: "Подъём небольшой, пауза наверху, поясница без боли." },
+                { name: "Берпи без прыжка", sets: lean ? "4 x 10-14" : "3 x 8-10", technique: "Движение чистое: шаг в упор, ровная планка, подъём через стопы." }
+            ]
+        });
+    }
+    return base;
 }
 
 function clampNumber(value, min, max, fallback) {

@@ -91,7 +91,7 @@ public class AppController {
                 feature("hair", "Стрижка", "Подбор формы", "scissors"),
                 feature("sleep", "Sleep Max", "Режим сна", "moon"),
                 feature("water", "Вода", "Напоминания", "waves"),
-                feature("body", "Body Max", "Тело", "dumbbell"),
+                feature("body", "Body Max", "Тело", "activity"),
                 feature("style", "Стиль", "Style Guide", "sparkles"),
                 feature("photo", "Фото-профиль", "Свет и ракурсы", "aperture"),
                 feature("wardrobe", "Гардероб", "Силуэт и цвета", "shirt"),
