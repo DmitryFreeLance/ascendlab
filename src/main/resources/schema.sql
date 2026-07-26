@@ -61,6 +61,14 @@ CREATE TABLE IF NOT EXISTS nutrition_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS chat_usage (
+    telegram_id BIGINT NOT NULL,
+    day_key VARCHAR(10) NOT NULL,
+    message_count INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (telegram_id, day_key)
+);
+
 CREATE TABLE IF NOT EXISTS admin_users (
     telegram_id BIGINT PRIMARY KEY,
     note VARCHAR(255),

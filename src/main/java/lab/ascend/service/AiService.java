@@ -104,7 +104,7 @@ public class AiService {
                 Верни строго JSON:
                 {"score":0,"summary":"...","metrics":[{"name":"гармония","value":0,"hint":"..."}],
                 "zones":[{"name":"кожа","status":"...","advice":"..."}],
-                "routine":["..."],"style":["..."],"riskNote":"..."}
+                "routine":["..."],"style":["..."]}
                 Пол: %s. Возраст: %d.
                 """.formatted(gender, age)));
         for (String dataUrl : dataUrls) {

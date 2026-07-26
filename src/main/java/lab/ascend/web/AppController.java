@@ -4,6 +4,7 @@ import lab.ascend.config.AppProperties;
 import lab.ascend.domain.UserProfile;
 import lab.ascend.repo.UserRepository;
 import lab.ascend.service.AdminService;
+import lab.ascend.service.ChatUsageService;
 import lab.ascend.service.CurrentUserService;
 import lab.ascend.service.PaymentService;
 import lab.ascend.service.PlanCatalogService;
@@ -27,6 +28,7 @@ public class AppController {
     private final PaymentService payments;
     private final PlanCatalogService plans;
     private final AdminService admins;
+    private final ChatUsageService chatUsage;
     private final UserRepository users;
     private final AppProperties properties;
 
@@ -35,6 +37,7 @@ public class AppController {
                          PaymentService payments,
                          PlanCatalogService plans,
                          AdminService admins,
+                         ChatUsageService chatUsage,
                          UserRepository users,
                          AppProperties properties) {
         this.currentUser = currentUser;
@@ -42,6 +45,7 @@ public class AppController {
         this.payments = payments;
         this.plans = plans;
         this.admins = admins;
+        this.chatUsage = chatUsage;
         this.users = users;
         this.properties = properties;
     }
@@ -54,6 +58,7 @@ public class AppController {
                 "onboardingSeen", users.onboardingSeen(user.telegramId()),
                 "isAdmin", admins.isAdmin(user.telegramId()),
                 "subscription", subscriptions.status(user.telegramId()),
+                "chatUsage", chatUsage.status(user.telegramId()),
                 "plans", plans.all(),
                 "payments", payments.paymentConfig(),
                 "features", features(),

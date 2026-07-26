@@ -3,6 +3,7 @@ package lab.ascend.web;
 import jakarta.validation.constraints.NotBlank;
 import lab.ascend.domain.UserProfile;
 import lab.ascend.service.AiService;
+import lab.ascend.service.ChatUsageService;
 import lab.ascend.service.CurrentUserService;
 import lab.ascend.service.SubscriptionService;
 import org.springframework.http.CacheControl;
@@ -22,11 +23,16 @@ import java.util.List;
 public class ChatController {
     private final CurrentUserService currentUser;
     private final SubscriptionService subscriptions;
+    private final ChatUsageService chatUsage;
     private final AiService ai;
 
-    public ChatController(CurrentUserService currentUser, SubscriptionService subscriptions, AiService ai) {
+    public ChatController(CurrentUserService currentUser,
+                          SubscriptionService subscriptions,
+                          ChatUsageService chatUsage,
+                          AiService ai) {
         this.currentUser = currentUser;
         this.subscriptions = subscriptions;
+        this.chatUsage = chatUsage;
         this.ai = ai;
     }
 
@@ -35,6 +41,9 @@ public class ChatController {
                                                         @RequestBody ChatRequest request) {
         UserProfile user = currentUser.require(initData);
         boolean active = subscriptions.isActive(user.telegramId());
+        if (active) {
+            chatUsage.reserve(user.telegramId());
+        }
         StreamingResponseBody body = output -> ai.streamChat(user, active, request.message(), request.history(), output);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noCache())
