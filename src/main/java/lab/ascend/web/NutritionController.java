@@ -40,6 +40,9 @@ public class NutritionController {
                                    @RequestBody MealRequest request) {
         UserProfile user = currentUser.require(initData);
         boolean pro = subscriptions.isActive(user.telegramId());
+        if (!pro) {
+            throw new IllegalStateException("AI-оценка КБЖУ доступна с BodyPro");
+        }
         return nutrition.add(user.telegramId(), request.mealType(), request.text(), pro);
     }
 

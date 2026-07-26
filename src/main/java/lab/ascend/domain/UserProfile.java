@@ -17,6 +17,6 @@ public record UserProfile(
         if (username != null && !username.isBlank()) {
             return "@" + username;
         }
-        return "Ascender";
+        return "Пользователь";
     }
 }

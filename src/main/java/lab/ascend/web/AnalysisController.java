@@ -71,6 +71,9 @@ public class AnalysisController {
             throw new IllegalArgumentException("Неизвестный раздел");
         }
         boolean pro = subscriptions.isActive(user.telegramId());
+        if (!pro) {
+            throw new IllegalStateException(tool.title() + " доступен с BodyPro");
+        }
         return analysis.analyzeTool(user, tool, toImage(photo), pro);
     }
 

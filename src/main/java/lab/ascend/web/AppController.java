@@ -2,6 +2,7 @@ package lab.ascend.web;
 
 import lab.ascend.config.AppProperties;
 import lab.ascend.domain.UserProfile;
+import lab.ascend.repo.AnalysisRepository;
 import lab.ascend.repo.UserRepository;
 import lab.ascend.service.AdminService;
 import lab.ascend.service.ChatUsageService;
@@ -30,6 +31,7 @@ public class AppController {
     private final AdminService admins;
     private final ChatUsageService chatUsage;
     private final UserRepository users;
+    private final AnalysisRepository analyses;
     private final AppProperties properties;
 
     public AppController(CurrentUserService currentUser,
@@ -39,6 +41,7 @@ public class AppController {
                          AdminService admins,
                          ChatUsageService chatUsage,
                          UserRepository users,
+                         AnalysisRepository analyses,
                          AppProperties properties) {
         this.currentUser = currentUser;
         this.subscriptions = subscriptions;
@@ -47,6 +50,7 @@ public class AppController {
         this.admins = admins;
         this.chatUsage = chatUsage;
         this.users = users;
+        this.analyses = analyses;
         this.properties = properties;
     }
 
@@ -59,6 +63,7 @@ public class AppController {
                 "isAdmin", admins.isAdmin(user.telegramId()),
                 "subscription", subscriptions.status(user.telegramId()),
                 "chatUsage", chatUsage.status(user.telegramId()),
+                "hasFaceAnalysis", analyses.existsByTelegramId(user.telegramId()),
                 "plans", plans.all(),
                 "payments", payments.paymentConfig(),
                 "features", features(),

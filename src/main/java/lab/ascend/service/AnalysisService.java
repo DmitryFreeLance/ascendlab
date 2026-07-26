@@ -24,6 +24,9 @@ public class AnalysisService {
     }
 
     public Map<String, Object> analyze(UserProfile user, List<UploadedImage> images, boolean pro) {
+        if (!pro && reports.existsByTelegramId(user.telegramId())) {
+            throw new IllegalStateException("Повторный анализ лица открыт с BodyPro");
+        }
         List<String> dataUrls = images.stream()
                 .filter(image -> image.bytes().length > 0)
                 .limit(2)
@@ -50,7 +53,7 @@ public class AnalysisService {
                         metric("Гармония", clamp(score - 2, 0, 100), "Черты читаются цельно, можно усилить контур."),
                         metric("Кожа", clamp(68 + seed, 0, 100), "Главный быстрый выигрыш даст стабильный уход."),
                         metric("Углы", clamp(70 + seed / 2, 0, 100), "Фронтальное фото стоит повторить с мягким верхним светом."),
-                        metric("Стиль", clamp(64 + seed, 0, 100), "Нужна более точная цветовая палитра и силуэт.")
+                        metric("Фото", clamp(64 + seed, 0, 100), "Свет, ракурс и выражение можно сделать чище.")
                 ),
                 "zones", List.of(
                         zone("Кожа", "выравнивание", "Утро: мягкое очищение, увлажнение, SPF. Вечер: очищение и восстановление барьера."),
@@ -60,9 +63,8 @@ public class AnalysisService {
                 "routine", List.of(
                         "7 дней: стабилизировать сон и воду, убрать случайные эксперименты с кожей.",
                         "14 дней: подобрать стрижку под форму лица и сделать 3 контрольных фото.",
-                        "30 дней: закрепить уход, питание и стиль как повторяемую систему."
+                        "30 дней: закрепить уход, питание и контрольные фото как повторяемую систему."
                 ),
-                "style", List.of("холодный белый", "серебристый", "графит", "чистый деним"),
                 "lockedPersonalPlan", !pro
         );
         try {

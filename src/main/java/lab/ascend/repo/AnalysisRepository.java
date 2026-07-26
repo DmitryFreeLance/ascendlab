@@ -20,4 +20,13 @@ public class AnalysisRepository {
                         """,
                 UUID.randomUUID().toString(), telegramId, score, json);
     }
+
+    public boolean existsByTelegramId(long telegramId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM analysis_reports WHERE telegram_id = ?",
+                Integer.class,
+                telegramId
+        );
+        return count != null && count > 0;
+    }
 }

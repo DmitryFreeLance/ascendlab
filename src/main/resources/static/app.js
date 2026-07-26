@@ -13,8 +13,11 @@ const CHAT_RENDER_INTERVAL = 64;
 const CHAT_PUNCTUATION_DELAY = 132;
 const BODYGPT_DAILY_LIMIT = 100;
 const BODYLAB_DAY_SHIFT_MS = 60 * 60 * 1000;
+const PHOTO_ANALYSIS_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+const BODY_ANALYSIS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 let planClockTimer = null;
 let chatScrollFrame = null;
+let countdownTimer = null;
 
 function apiPath(path) {
     return `${APP_BASE_PATH}${path}`;
@@ -37,6 +40,10 @@ const state = {
     planReports: {},
     selectedPlanDay: null,
     selectedGuide: null,
+    selectedGuideCategory: "",
+    guideTrack: "soft",
+    analysisStep: 1,
+    water: { enabled: false, amountMl: 0, targetMl: 2500, dayKey: "" },
     bodyProfile: null,
     bodyAnalysis: null,
     bodyHistory: [],
@@ -193,104 +200,37 @@ const toolWorkspaces = {
     }
 };
 
-const guideLibrary = [
-    {
-        id: "skin",
-        tag: "Softmaxxing",
-        title: "Кожа: база, которая реально меняет лицо",
-        intro: "Полный справочник по уходу без хаоса: барьер, SPF, очищение, активы и частые ошибки.",
-        image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=80",
-        sections: [
-            {
-                title: "Утренний протокол",
-                text: "Утро должно быть коротким и повторяемым. Главная задача — не перегрузить кожу, а защитить её на день.",
-                items: ["Мягкое очищение или просто вода, если кожа сухая.", "Увлажнение по ощущению стянутости.", "SPF каждый день, особенно если есть постакне или неровный тон."]
-            },
-            {
-                title: "Вечерний протокол",
-                text: "Вечером ты снимаешь город, пот, себум и SPF. Здесь важнее стабильность, чем агрессивные активы.",
-                items: ["Очищение без скрипа.", "Восстановление барьера: крем или лёгкий лосьон.", "Активы вводить по одному, минимум на 10-14 дней."]
-            },
-            {
-                title: "Ошибки",
-                text: "Большинство проблем усиливается не отсутствием продукта, а слишком резкими экспериментами.",
-                items: ["Не смешивай много кислот и ретиноидов сразу.", "Не меняй всю рутину за один вечер.", "Не оценивай результат раньше 3-4 недель."]
-            }
-        ]
-    },
-    {
-        id: "photo",
-        tag: "Фото",
-        title: "Фото профиля: свет, лицо, ракурс",
-        intro: "Как сделать снимки, которые усиливают черты и не превращают лицо в случайный скрин.",
-        image: "assets/battle/fake-neo.jpg",
-        sections: [
-            {
-                title: "Свет",
-                text: "Лучший свет для лица мягкий и направленный. Он показывает структуру, но не делает кожу грязной.",
-                items: ["Окно сбоку под 30-45 градусов.", "Не снимай снизу и под потолочным светом.", "Избегай сильного контрового света."]
-            },
-            {
-                title: "Ракурс",
-                text: "Камера на уровне глаз почти всегда выигрывает. Низкий угол делает нос и нижнюю треть тяжелее.",
-                items: ["Телефон чуть выше глаз или на уровне глаз.", "Подбородок не задирать.", "Сделать серию: фронт, 3/4, профиль."]
-            },
-            {
-                title: "Отбор",
-                text: "Не выбирай фото в моменте. Сначала сделай серию, потом сравни по чистоте света и выражению.",
-                items: ["12-20 кадров за одну сессию.", "Оставить 2 лучших.", "Проверить фото маленьким размером, как в профиле."]
-            }
-        ]
-    },
-    {
-        id: "body",
-        tag: "Hardmaxxing",
-        title: "Тело: масса, сушка или рекомпозиция",
-        intro: "Как выбрать цель и не прыгать между набором и похудением каждую неделю.",
-        image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
-        sections: [
-            {
-                title: "Выбор цели",
-                text: "Цель зависит от веса, талии, тренировочного опыта и того, как одежда сидит сейчас.",
-                items: ["Если талия растёт быстрее силы — сначала сушка или рекомпозиция.", "Если вес низкий и силы нет — мягкий набор.", "Если новичок — чаще всего рекомпозиция."]
-            },
-            {
-                title: "Питание",
-                text: "Тело меняется от энергии, белка и повторяемости. Идеальный рацион не нужен, нужен стабильный.",
-                items: ["Белок 1.8-2.2 г на кг веса.", "Дефицит или профицит держать умеренным.", "Взвешиваться 3 раза в неделю и смотреть среднее."]
-            },
-            {
-                title: "Тренировки",
-                text: "Минимум, который работает: прогрессия в базовых движениях и восстановление.",
-                items: ["3-4 силовые в неделю.", "Фиксировать веса и повторы.", "Не менять программу чаще раза в 6-8 недель."]
-            }
-        ]
-    },
-    {
-        id: "style",
-        tag: "Стиль",
-        title: "Стиль: силуэт, посадка, цвета",
-        intro: "Большая база по одежде, которая усиливает лицо и тело без лишней театральности.",
-        image: "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=1200&q=80",
-        sections: [
-            {
-                title: "Силуэт",
-                text: "Силуэт должен создавать понятную форму: плечи, талия, длина ног, чистая линия верха.",
-                items: ["Не носи слишком длинный верх, если он режет ноги.", "Плечевой шов должен быть на месте.", "Избегай складок от плохой посадки."]
-            },
-            {
-                title: "Цвет",
-                text: "Цвет около лица влияет на свежесть кожи сильнее, чем кажется.",
-                items: ["Проверяй цвет при дневном свете.", "Если лицо сереет — цвет не твой.", "База: 2 нейтрала + 1 акцент."]
-            },
-            {
-                title: "Сборка образа",
-                text: "Хороший образ — это не дорогая вещь, а понятная связка.",
-                items: ["Верх, низ, обувь должны быть одной степени аккуратности.", "Один акцент достаточно.", "Фото в зеркале покажет ошибки быстрее, чем память."]
-            }
-        ]
-    }
+const guideCategories = [
+    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets", image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=80" },
+    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors", image: "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=80" },
+    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye", image: "https://images.unsplash.com/photo-1512316609839-ce289d3eba0a?auto=format&fit=crop&w=1200&q=80" },
+    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles", image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=80" },
+    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity", image: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80" },
+    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture", image: "assets/battle/fake-neo.jpg" },
+    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80" },
+    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile", image: "https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=1200&q=80" },
+    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line", image: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&w=1200&q=80" },
+    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert", image: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1200&q=80" },
+    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus", image: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&w=1200&q=80" },
+    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell", image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80" }
 ];
+
+const guideSeeds = {
+    skin: ["Автозагар", "Акне", "Акнекутан: что важно знать", "Диета и кожа", "SPF без жирного блеска", "Постакне и тон", "Очищение без скрипа", "Увлажнение", "Ретиноиды: старт", "Кислоты", "Бритьё и раздражение", "Отёки утром", "Губы и барьер", "Минимальная рутина"],
+    hair: ["Форма стрижки", "Виски и затылок", "Объём сверху", "Укладка без грязного блеска", "Подбор мастера", "Борода и щетина", "Линия роста", "Сушка волос", "Референсы для барбера"],
+    brows: ["Форма бровей", "Плотность", "Симметрия", "Цвет и контраст", "Укладка", "Ошибки коррекции", "Брови и взгляд", "Мини-протокол"],
+    style: ["Силуэт", "Цвета у лица", "Капсула на 30 дней"],
+    posture: ["Шея вперёд", "Плечи", "Лопатки", "Таз и поясница", "Походка", "Фото осанки", "Ежедневный комплекс"],
+    photo: ["Свет", "Ракурс", "Выражение", "Аватарка", "Фото для знакомств", "Разбор серии"],
+    jaw: ["Жевательные мышцы: трезвый подход"],
+    ortho: ["Брекеты и элайнеры", "Консультация ортодонта"],
+    bite: ["Прикус и профиль", "Когда идти к специалисту"],
+    operations: ["Ринопластика", "Блефаропластика", "Подбородок", "Скулы", "Липосакция лица", "Риски операций", "Как готовить вопросы врачу"],
+    implants: ["Подбородочный имплант", "Скуловые импланты"],
+    body: ["Набор массы", "Похудение", "Рекомпозиция", "Плечи и спина", "Талия и пресс"]
+};
+
+const guideLibrary = buildGuideLibrary();
 
 const onboarding = [
     {
@@ -395,6 +335,7 @@ async function bootstrap() {
         const returnPlan = showReturnPaymentNotice();
         render();
         startPlanClock();
+        startCountdownClock();
         if (returnPlan) openAccessModal(returnPlan);
     } catch (error) {
         document.querySelector("#app").innerHTML = `<section class="section-panel"><h2>Не удалось запустить BodyLab</h2><p class="muted">${escapeHtml(error.message)}</p></section>`;
@@ -534,30 +475,133 @@ function renderFeatures() {
 
 function renderAnalysis() {
     const result = state.analysis;
+    if (state.busy.analysis) return renderFaceAnalysisProgress();
+    if (!isPro() && hasUsedFreeFaceAnalysis()) return renderFaceAnalysisLocked(result);
+    if (!result) return renderFaceAnalysisWizard();
+    const remaining = analysisCooldownRemaining("face");
+    const canRun = canRunFaceAnalysis();
+    const blockedByAccess = !isPro() && hasUsedFreeFaceAnalysis();
+    const buttonBusy = state.busy.analysis;
+    const buttonLabel = blockedByAccess ? "Открыть BodyPro" : remaining > 0 ? `Обновление через ${formatDuration(remaining)}` : "Оценить лицо";
+    const buttonBusyLabel = "Сканирую...";
     return `<section class="section-panel">
         <p class="eyebrow">Анализ лица</p>
         <h1>Скан внешности</h1>
         <p class="muted">Загрузи фронтальное фото и, по желанию, боковой ракурс. BodyLab соберёт эстетический профиль, зоны роста и первые действия.</p>
+        ${result && !blockedByAccess ? cooldownNotice("face") : ""}
         <div class="upload-grid">
             ${uploadTile("front", "Анфас", "хорошее освещение")}
             ${uploadTile("side", "Профиль", "по желанию")}
         </div>
-        <button class="button primary ${state.busy.analysis ? "processing" : ""}" data-action="run-analysis" ${state.busy.analysis ? "disabled" : ""}>${buttonContent("Оценить лицо", "Сканирую...", "scan-line", state.busy.analysis)}</button>
+        <button class="button primary ${buttonBusy ? "processing" : ""}" data-action="${blockedByAccess ? "open-payment" : "run-analysis"}" ${buttonBusy || (!blockedByAccess && !canRun) ? "disabled" : ""}>${buttonBusy ? buttonContent("Оценить лицо", buttonBusyLabel, "scan-line", true) : `<i data-lucide="${blockedByAccess ? "unlock" : "scan-line"}"></i><span ${!blockedByAccess && remaining > 0 ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>`}</button>
     </section>
     ${result ? renderAnalysisResult(result) : ""}
     <section class="section-panel">
         <p class="eyebrow">Персональный план</p>
         <h2>${isPro() ? "Открыт" : "План закрыт"}</h2>
         <p class="muted">${isPro() ? "После анализа здесь появится 60-дневный маршрут по зонам." : "Персональный план доступен с BodyPro."}</p>
-        <button class="button ${isPro() ? "secondary" : "primary"}" data-view="${isPro() ? "plan" : "dashboard"}">${isPro() ? "Открыть план" : "Получить доступ"}</button>
+        ${isPro()
+            ? `<button class="button secondary" data-view="plan">Открыть план</button>`
+            : `<button class="button primary" data-action="open-payment">Получить доступ</button>`}
     </section>`;
 }
 
+function renderFaceAnalysisWizard() {
+    const step = Math.max(1, Math.min(3, Number(state.analysisStep) || 1));
+    const hasFront = Boolean(state.files.front || state.previews.front);
+    if (step > 1 && !hasFront) {
+        state.analysisStep = 1;
+        return renderFaceAnalysisWizard();
+    }
+    if (step === 1) return renderFaceAnalysisStepFront(hasFront);
+    if (step === 2) return renderFaceAnalysisStepSide();
+    return renderFaceAnalysisStepReview();
+}
+
+function renderFaceStepShell(step, title, text, body) {
+    return `<section class="section-panel face-flow-card">
+        <p class="eyebrow">Анализ лица</p>
+        <h1>Шаг ${step} · ${title}</h1>
+        <p class="muted">${text}</p>
+        ${faceStepDots(step)}
+        ${body}
+    </section>`;
+}
+
+function faceStepDots(active) {
+    return `<div class="face-step-dots">${[1, 2, 3, 4].map(index => `<span class="${index < active ? "done" : index === active ? "active" : ""}"></span>`).join("")}</div>`;
+}
+
+function renderFaceAnalysisStepFront(hasFront) {
+    return renderFaceStepShell(1, "Анфас", "Загрузи фронтальное фото лица.", `
+        <div class="face-upload-stage">${uploadTile("front", "Загрузить анфас", "лицо прямо · хороший свет")}</div>
+        <button class="button primary" data-action="analysis-next" ${hasFront ? "" : "disabled"}>Продолжить</button>
+    `);
+}
+
+function renderFaceAnalysisStepSide() {
+    const hasSide = Boolean(state.files.side || state.previews.side);
+    return renderFaceStepShell(2, "Второе фото", "Профиль улучшает точность, но анализ можно сделать и по одному фото.", `
+        <div class="face-upload-stage">${uploadTile("side", "Загрузить профиль", "по желанию")}</div>
+        <button class="button primary" data-action="analysis-next">${hasSide ? "Продолжить" : "Пропустить"}</button>
+        <p class="muted center">Можно сделать анализ по одному фото</p>
+        <button class="button secondary" data-action="analysis-back"><i data-lucide="arrow-left"></i>Назад</button>
+    `);
+}
+
+function renderFaceAnalysisStepReview() {
+    const hasSide = Boolean(state.files.side || state.previews.side);
+    return renderFaceStepShell(3, "Запуск", "Проверь фото и запусти анализ.", `
+        <div class="face-review-grid">
+            ${faceReviewPhoto("front", "Анфас")}
+            ${hasSide ? faceReviewPhoto("side", "Профиль") : `<div class="face-review-photo empty"><span>нет</span><small>Профиль</small></div>`}
+        </div>
+        <div class="review-lines">
+            <div><span>Пол</span><strong>${state.settings.gender === "female" ? "Женщина" : "Мужчина"}</strong></div>
+            <div><span>Фото</span><strong>${hasSide ? "Анфас и профиль" : "Только анфас"}</strong></div>
+            <div><span>Режим</span><strong>${isPro() ? "Полный анализ" : "Первый скан"}</strong></div>
+        </div>
+        <p class="muted">Проверь фото и запусти анализ.</p>
+        <button class="button primary" data-action="run-analysis">Начать анализ</button>
+        <button class="button secondary" data-action="analysis-back"><i data-lucide="arrow-left"></i>Назад</button>
+    `);
+}
+
+function faceReviewPhoto(kind, label) {
+    const src = state.previews[kind];
+    return `<div class="face-review-photo ${src ? "has-photo" : ""}">
+        ${src ? `<img src="${src}" alt="">` : `<span>нет</span>`}
+        <small>${label}</small>
+    </div>`;
+}
+
+function renderFaceAnalysisProgress() {
+    return renderFaceStepShell(4, "Анализ", "Идёт построение карты лица и расчёт оценки...", `
+        <div class="face-processing-stage">
+            <div class="telegram-pill"><i data-lucide="send"></i><span>BodyLab</span></div>
+            <div class="processing-face">${state.previews.front ? `<img src="${state.previews.front}" alt="">` : `<span class="brand-mark">B</span>`}</div>
+            <p class="muted">Определяем точки и строим карту</p>
+            <div class="scan-loader"><span></span></div>
+        </div>
+    `);
+}
+
+function renderFaceAnalysisLocked(result) {
+    return renderFaceStepShell(4, "Анализ", "Финальный отчёт собран.", `
+        <div class="locked-analysis-card">
+            <span class="icon-shell"><i data-lucide="lock"></i></span>
+            <p class="eyebrow">Доступ закрыт</p>
+            <h2>${result ? "Анализ готов" : "Первый скан уже использован"}</h2>
+            <p class="muted">Полная карта лица, разбор сильных сторон, шкалы и план улучшения открываются с BodyPro.</p>
+            <button class="button primary" data-action="open-payment">Получить доступ</button>
+        </div>
+    `);
+}
+
 function renderAnalysisResult(result) {
-    const metrics = result.metrics || [];
-    const zones = result.zones || [];
+    const metrics = (result.metrics || []).filter(item => !isStyleMetric(item?.name));
+    const zones = (result.zones || []).filter(item => !isStyleMetric(item?.name));
     const routine = Array.isArray(result.routine) ? result.routine.filter(Boolean).slice(0, 5) : [];
-    const style = Array.isArray(result.style) ? result.style.filter(Boolean).slice(0, 8) : [];
     const score = Math.max(0, Math.min(100, Number(result.score) || 0));
     const comparison = result.comparison || scanComparison(state.analysisHistory[1], result, "face");
     return `<section class="section-panel analysis-result">
@@ -576,21 +620,17 @@ function renderAnalysisResult(result) {
         </div>
         ${renderScanComparison(comparison)}
         ${zones.length ? `<div class="analysis-zone-grid">${zones.map(analysisZone).join("")}</div>` : ""}
-        ${routine.length || style.length ? `<div class="analysis-next-grid">
+        ${routine.length ? `<div class="analysis-next-grid">
             ${routine.length ? `<article class="analysis-plan-card">
                 <p class="eyebrow">Маршрут</p>
                 <h3>Первые действия</h3>
                 <ol class="routine-list">${routine.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
             </article>` : ""}
-            ${style.length ? `<article class="analysis-plan-card style-advice-card">
-                <p class="eyebrow">Подача</p>
-                <h3>Цвета и стиль</h3>
-                <div class="style-token-list">${style.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>
-                <p class="muted">Выбери 1-2 оттенка для следующего фото и не смешивай их с лишними акцентами.</p>
-            </article>` : ""}
         </div>` : ""}
         <div class="analysis-followup">
-            <button class="button primary" data-view="${isPro() ? "plan" : "dashboard"}"><i data-lucide="route"></i>${isPro() ? `Начать день ${currentPlanDay()}` : "Открыть BodyPro"}</button>
+            ${isPro()
+                ? `<button class="button primary" data-view="plan"><i data-lucide="route"></i>Начать день ${currentPlanDay()}</button>`
+                : `<button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Открыть BodyPro</button>`}
             <button class="button secondary" data-action="ask-gpt" data-prompt="Составь мне первый день после анализа лица"><i data-lucide="brain"></i>Спросить BodyGPT</button>
         </div>
     </section>`;
@@ -620,6 +660,7 @@ function renderBodyMax() {
     if (!isPro()) return renderLockedFeature("Body Max", "Оценка формы тела, цель по массе или похудению и недельный план открываются с BodyPro.");
     const profile = bodyProfile();
     const baseAssessment = bodyAssessment(profile);
+    const remaining = analysisCooldownRemaining("body");
     const assessment = state.bodyAnalysis ? {
         ...baseAssessment,
         score: state.bodyAnalysis.score,
@@ -632,6 +673,7 @@ function renderBodyMax() {
         <p class="eyebrow">Body Max</p>
         <h1>Форма тела</h1>
         <p class="muted">Загрузи фото формы, выбери цель и получи план по питанию, тренировкам и контрольным замерам.</p>
+        ${assessment ? cooldownNotice("body") : ""}
         <div class="upload-grid">
             ${uploadTile("body", "Фото тела", "прямо, без сильного ракурса")}
             ${assessment ? `<div class="body-score-card">
@@ -661,7 +703,7 @@ function renderBodyMax() {
             <label>Талия, см<input id="bodyWaist" inputmode="decimal" value="${profile.waist}"></label>
             <label>Тренировок/нед.<input id="bodyWorkouts" inputmode="numeric" value="${profile.workouts}"></label>
         </div>
-        <button class="button primary ${state.busy.body ? "processing" : ""}" data-action="run-body-analysis" ${state.busy.body ? "disabled" : ""}>${buttonContent("Оценить форму", "Оцениваю форму...", "scan-line", state.busy.body)}</button>
+        <button class="button primary ${state.busy.body ? "processing" : ""}" data-action="run-body-analysis" ${state.busy.body || remaining > 0 ? "disabled" : ""}>${state.busy.body ? buttonContent("Оценить форму", "Оцениваю форму...", "scan-line", true) : `<i data-lucide="scan-line"></i><span ${remaining > 0 ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${remaining > 0 ? `Обновление через ${formatDuration(remaining)}` : "Оценить форму"}</span>`}</button>
     </section>
     ${assessment ? renderBodyResult(assessment) : `<section class="section-panel body-plan-empty">
         <p class="eyebrow">План тела</p>
@@ -716,11 +758,13 @@ function renderToolWorkspace(id) {
     const kind = toolUploadKind(id);
     const report = state.toolReports[id];
     const busy = state.busy.tool === id;
+    const remaining = analysisCooldownRemaining(id);
     return `<section class="section-panel tool-workspace">
         <span class="icon-shell"><i data-lucide="${tool.icon}"></i></span>
         <p class="eyebrow">${tool.eyebrow}</p>
         <h1>${tool.title}</h1>
         <p class="muted">${tool.text}</p>
+        ${report ? cooldownNotice(id) : ""}
         <div class="upload-grid">
             ${uploadTile(kind, tool.uploadTitle || "Фото для анализа", tool.uploadSubtitle || "хорошее освещение")}
             ${report ? `<div class="tool-scan-card">
@@ -737,7 +781,12 @@ function renderToolWorkspace(id) {
                 <p class="muted">${escapeHtml(tool.emptyText || "После фото появятся оценка, выводы и первые действия.")}</p>
             </div>`}
         </div>
-        <button class="button primary ${busy ? "processing" : ""}" data-action="run-tool-analysis" data-tool-id="${id}" ${busy ? "disabled" : ""}>${buttonContent("Оценить", "Анализирую...", "scan-line", busy)}</button>
+        <button class="button primary ${busy ? "processing" : ""}" data-action="run-tool-analysis" data-tool-id="${id}" ${busy || remaining > 0 ? "disabled" : ""}>${busy ? buttonContent("Оценить", "Анализирую...", "scan-line", true) : `<i data-lucide="scan-line"></i><span ${remaining > 0 ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${remaining > 0 ? `Обновление через ${formatDuration(remaining)}` : "Оценить"}</span>`}</button>
+        ${id === "water" ? `<div class="coach-card water-enable-card">
+            <i data-lucide="waves"></i>
+            <div><strong>Трекер воды</strong><p class="muted">Добавь воду в дневной маршрут и питание: появится отдельная полоска прогресса.</p></div>
+            <button class="button secondary" data-action="add-tool-to-plan" data-tool-id="water">${state.water.enabled ? "Открыть" : "Добавить"}</button>
+        </div>` : ""}
     </section>
     ${report ? renderToolReport(id, tool, report) : `<section class="section-panel tool-empty-state">
         <p class="eyebrow">Следующий шаг</p>
@@ -764,7 +813,7 @@ function renderToolReport(id, tool, report) {
                 <p class="eyebrow">Связать</p>
                 <h3>В дневной план</h3>
                 <p class="muted">${escapeHtml(report.planText || "Зафиксируй этот блок в отчёте дня и вернись к нему после нового фото.")}</p>
-                <button class="button secondary" data-view="plan"><i data-lucide="route"></i>Открыть день</button>
+                <button class="button secondary" data-action="add-tool-to-plan" data-tool-id="${id}"><i data-lucide="route"></i>Добавить в день</button>
             </article>
         </div>
     </section>`;
@@ -793,6 +842,7 @@ function renderPlan() {
     const canEdit = canEditPlanDay(day);
     const phase = planPhase(day);
     const report = planReport(day);
+    const dayTasks = planTasksForReport(day, report);
     const done = report.tasks.filter(Boolean).length;
     const savedReports = Object.values(state.planReports).filter(item => item.updatedAt);
     const progress = savedReports.length
@@ -821,9 +871,10 @@ function renderPlan() {
             <button class="icon-button ghost" data-plan-day="${Math.min(60, day + 1)}" ${day >= 60 ? "disabled" : ""} aria-label="Следующий день"><i data-lucide="chevron-right"></i></button>
         </div>
         ${canEdit ? `<div class="coach-card"><i data-lucide="sparkles"></i><div><strong>Фокус дня</strong><p class="muted">Отметь выполненное и вечером добавь короткий отчёт. Следующий шаг откроется завтра.</p></div></div>` : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>Только просмотр</strong><p class="muted">${day < today ? "Этот день уже закрыт для отчёта." : "Этот день можно посмотреть заранее, а отметки откроются позже."}</p></div></div>`}
-        <div class="day-progress-line"><span style="width:${Math.round((done / phase.tasks.length) * 100)}%"></span></div>
+        ${state.water.enabled ? waterTrackerHtml("plan") : ""}
+        <div class="day-progress-line"><span style="width:${Math.round((done / dayTasks.length) * 100)}%"></span></div>
         <div class="task-list">
-            ${phase.tasks.map((task, index) => `<label class="task-item ${report.tasks[index] ? "done" : ""}">
+            ${dayTasks.map((task, index) => `<label class="task-item ${report.tasks[index] ? "done" : ""}">
                 <input type="checkbox" data-plan-task="${index}" ${report.tasks[index] ? "checked" : ""} ${canEdit ? "" : "disabled"}>
                 <span><i data-lucide="${report.tasks[index] ? "check" : "circle"}"></i></span>
                 <strong>${escapeHtml(task)}</strong>
@@ -869,11 +920,12 @@ function renderNutrition() {
     return `<section class="section-panel">
         <p class="eyebrow">Питание</p>
         <h1>Дневник КБЖУ</h1>
-        <p class="muted">Считай калории и БЖУ, добавляй приёмы пищи и получай советы по рациону.</p>
+        <p class="muted">Считай калории и БЖУ, воду и базовую отчётность по рациону.</p>
         <div class="nutrition-ring"><div><strong>${data.calories}</strong><span class="muted"> / ${data.targetCalories} ккал</span></div></div>
         ${metric("Белки", pct(data.protein, 150), `${data.protein} г`)}
         ${metric("Жиры", pct(data.fat, 70), `${data.fat} г`)}
         ${metric("Углеводы", pct(data.carbs, 250), `${data.carbs} г`)}
+        ${state.water.enabled ? waterTrackerHtml("nutrition") : ""}
     </section>
     <section class="section-panel">
         <h2>Добавить приём пищи</h2>
@@ -883,7 +935,8 @@ function renderNutrition() {
                 return `<button data-value="${value}" class="${state.mealType === value ? "active" : ""}">${label}</button>`;
             }).join("")}</div>
             <input class="meal-input" id="mealInput" placeholder="Напр.: 2 яйца, тост с авокадо">
-            <button class="button primary ${state.busy.meal ? "processing" : ""}" data-action="add-meal" ${state.busy.meal ? "disabled" : ""}>${buttonContent("Оценить и добавить", "Считаю КБЖУ...", "wand-sparkles", state.busy.meal)}</button>
+            ${isPro() ? "" : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>AI-оценка с BodyPro</strong><p class="muted">Дневник открыт, а автоматический разбор еды подключается с подпиской.</p></div></div>`}
+            <button class="button primary ${state.busy.meal ? "processing" : ""}" data-action="add-meal" ${state.busy.meal ? "disabled" : ""}>${buttonContent(isPro() ? "Оценить и добавить" : "Оценить с BodyPro", "Считаю КБЖУ...", "wand-sparkles", state.busy.meal)}</button>
             ${state.busy.meal ? `<div class="coach-card"><span class="mini-loader"></span><div><strong>Разбираю приём пищи</strong><p class="muted">Считаю калории и БЖУ, затем добавлю запись в дневник.</p></div></div>` : ""}
             <div class="zone-list">${(data.logs || []).map(log => `<div class="zone-card"><strong>${escapeHtml(log.title)}<em>${log.calories} ккал</em></strong><p class="muted">Б ${log.protein} · Ж ${log.fat} · У ${log.carbs}</p></div>`).join("")}</div>
         </div>
@@ -893,23 +946,54 @@ function renderNutrition() {
 function renderAcademy() {
     const selected = guideLibrary.find(guide => guide.id === state.selectedGuide);
     if (selected) return renderGuideDetail(selected);
+    if (state.selectedGuideCategory) return renderGuideCategory(state.selectedGuideCategory);
+    const categories = guideCategories.filter(category => category.track === state.guideTrack);
     return `<section class="section-panel academy-home">
         <p class="eyebrow">Академия</p>
         <h1>Гайды</h1>
-        <p class="muted">Большие справочники с фото, чеклистами и конкретными правилами: кожа, фото, тело и стиль.</p>
-        <div class="guide-grid">${guideLibrary.map(guide => `<article class="guide-card">
+        <p class="muted">Большие справочники с фото, чеклистами и конкретными правилами: уход, волосы, фото, тело, стиль и осознанные решения.</p>
+        <div class="segmented guide-track-tabs">
+            <button class="${state.guideTrack === "soft" ? "active" : ""}" data-guide-track="soft">Softmaxxing</button>
+            <button class="${state.guideTrack === "hard" ? "active" : ""}" data-guide-track="hard">Hardmaxxing</button>
+        </div>
+        <div class="guide-category-grid">${categories.map(category => `<article class="guide-category-card ${category.track === "hard" ? "hard" : ""}">
+            <span class="icon-shell"><i data-lucide="${category.icon}"></i></span>
+            <span class="badge">${category.tag}</span>
+            <h3>${category.title}</h3>
+            <small>Всего гайдов: ${guidesForCategory(category.id).length}</small>
+            <button class="button secondary" data-guide-category="${category.id}"><i data-lucide="book-open"></i>Смотреть гайды</button>
+        </article>`).join("")}</div>
+    </section>`;
+}
+
+function renderGuideCategory(categoryId) {
+    const category = guideCategories.find(item => item.id === categoryId) || guideCategories[0];
+    const guides = guidesForCategory(category.id);
+    return `<section class="section-panel academy-home">
+        <button class="button quiet guide-back" data-action="back-guide-categories"><i data-lucide="chevron-left"></i>Разделы</button>
+        <div class="guide-category-hero">
+            <span class="icon-shell"><i data-lucide="${category.icon}"></i></span>
+            <div>
+                <p class="eyebrow">${category.tag}</p>
+                <h1>${category.title}</h1>
+                <p class="muted">Всего гайдов: ${guides.length}</p>
+            </div>
+        </div>
+        <div class="guide-list-grid">${guides.map(guide => `<article class="guide-list-card ${category.track === "hard" ? "hard" : ""}">
             <img src="${guide.image}" alt="">
-            <span class="badge">${guide.tag}</span>
-            <h3>${guide.title}</h3>
-            <small>${guide.intro}</small>
-            <button class="button secondary" data-guide="${guide.id}"><i data-lucide="book-open"></i>Открыть гайд</button>
+            <div>
+                <span class="badge">${guide.tag}</span>
+                <h3>${guide.title}</h3>
+                <p class="muted">${guide.intro}</p>
+                <div class="guide-card-foot"><span><i data-lucide="heart"></i> ${guide.likes}</span><button class="button secondary" data-guide="${guide.id}">Открыть</button></div>
+            </div>
         </article>`).join("")}</div>
     </section>`;
 }
 
 function renderGuideDetail(guide) {
     return `<section class="section-panel guide-detail">
-        <button class="button quiet guide-back" data-action="back-guides"><i data-lucide="chevron-left"></i>Все гайды</button>
+        <button class="button quiet guide-back" data-action="back-guides"><i data-lucide="chevron-left"></i>${state.selectedGuideCategory ? "К списку" : "Все гайды"}</button>
         <img class="guide-hero-image" src="${guide.image}" alt="">
         <p class="eyebrow">${guide.tag}</p>
         <h1>${guide.title}</h1>
@@ -921,7 +1005,7 @@ function renderGuideDetail(guide) {
         </article>`).join("")}
         ${guideProtocol(guide)}</div>
         <div class="analysis-followup">
-            <button class="button primary" data-view="plan"><i data-lucide="route"></i>Добавить в маршрут</button>
+            <button class="button primary" data-action="add-guide-to-plan" data-guide-id="${guide.id}"><i data-lucide="route"></i>Добавить в день</button>
             <button class="button secondary" data-action="ask-gpt" data-prompt="Помоги применить гайд: ${escapeHtml(guide.title)}"><i data-lucide="brain"></i>Спросить BodyGPT</button>
         </div>
     </section>`;
@@ -949,6 +1033,97 @@ function guideProtocol(guide) {
     </article>`;
 }
 
+function buildGuideLibrary() {
+    return Object.entries(guideSeeds).flatMap(([categoryId, titles]) => {
+        const category = guideCategories.find(item => item.id === categoryId) || guideCategories[0];
+        return titles.map((title, index) => makeGuide(category, title, index + 1));
+    });
+}
+
+function makeGuide(category, title, index) {
+    const id = `${category.id}-${index}`;
+    return {
+        id,
+        categoryId: category.id,
+        tag: category.tag,
+        title,
+        intro: guideIntroFor(category, title),
+        image: guideImageFor(category, index),
+        likes: 1 + (index % 7),
+        sections: guideSectionsFor(category, title)
+    };
+}
+
+function guidesForCategory(categoryId) {
+    return guideLibrary.filter(guide => guide.categoryId === categoryId);
+}
+
+function guideIntroFor(category, title) {
+    const intro = {
+        skin: "Уход, который делает лицо свежее без хаотичных покупок и резких экспериментов.",
+        hair: "Как волосы, контур и укладка меняют восприятие лица уже в первые секунды.",
+        brows: "Брови и взгляд: форма, плотность, контраст и аккуратность без перегиба.",
+        style: "Одежда как рамка для лица и тела: силуэт, посадка, цвет и чистая сборка.",
+        posture: "Осанка, шея, плечи и походка: визуальная собранность каждый день.",
+        photo: "Свет, ракурс, выражение и отбор кадров для профиля и социальных сетей.",
+        body: "Тело, питание и тренировки как часть внешности, а не отдельный проект.",
+        jaw: "Что реально влияет на нижнюю треть лица, а где лучше не форсировать.",
+        ortho: "Как готовиться к консультации и понимать варианты коррекции улыбки.",
+        bite: "Профиль, прикус и симметрия: когда стоит собирать мнение специалиста.",
+        operations: "Информационный разбор: вопросы, ожидания, риски и трезвый фильтр решений.",
+        implants: "Что учитывать до любых необратимых решений и как думать о пропорциях."
+    }[category.id] || "Практичный справочник BodyLab с чеклистами и контрольными действиями.";
+    return `${title}. ${intro}`;
+}
+
+function guideImageFor(category, index) {
+    if (index === 1) return category.image;
+    const pool = {
+        skin: ["https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=1200&q=80"],
+        hair: ["https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1622288432450-277d0fef5ed6?auto=format&fit=crop&w=1200&q=80"],
+        style: ["https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1506629905607-d405d7d3b0d2?auto=format&fit=crop&w=1200&q=80"],
+        posture: ["https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80"],
+        photo: ["assets/battle/fake-soft.jpg", "assets/battle/fake-raw.jpg"],
+        body: ["https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80"]
+    };
+    const fallback = ["https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80"];
+    const images = pool[category.id] || fallback;
+    return images[(index - 2) % images.length];
+}
+
+function guideSectionsFor(category, title) {
+    const focus = title.toLowerCase();
+    return [
+        {
+            title: "Что это меняет",
+            text: `${title} влияет на то, как лицо и образ считываются целиком. Смысл гайда — выделить управляемые действия, которые можно повторять и отслеживать без хаоса.`,
+            items: [
+                "Определи стартовую точку: фото, заметка или короткий замер.",
+                "Выбери один главный параметр, который меняешь в первую неделю.",
+                "Не смешивай сразу несколько новых привычек, иначе будет непонятно, что сработало."
+            ]
+        },
+        {
+            title: "Практический протокол",
+            text: `Работай с темой “${focus}” как с маленьким экспериментом: действие, наблюдение, корректировка. Так BodyLab сможет связать гайд с маршрутом и отчётами.`,
+            items: [
+                "День 1: сделай фото или отметку “до”.",
+                "Дни 2-6: повторяй выбранное действие в одно и то же время.",
+                "День 7: сравни результат и добавь вывод в дневной маршрут."
+            ]
+        },
+        {
+            title: "Ошибки",
+            text: "Внешность чаще портят не отсутствие идеального решения, а резкие скачки и плохая обратная связь.",
+            items: [
+                "Не оценивай результат по одному случайному фото.",
+                "Не покупай сразу много продуктов или вещей под одну идею.",
+                category.track === "hard" ? "Для необратимых решений собирай консультации, вопросы и сроки восстановления заранее." : "Сохраняй привычку маленькой, пока она не стала автоматической."
+            ]
+        }
+    ];
+}
+
 function renderBattle() {
     const opponent = selectedBattleOpponent();
     const ownPreview = state.previews.front;
@@ -956,14 +1131,14 @@ function renderBattle() {
     const winrate = state.battleHistory.length
             ? Math.round(state.battleHistory.filter(item => item.result === "win").length / state.battleHistory.length * 100)
             : 0;
-    const elo = 800 + state.battleHistory.reduce((sum, item) => sum + item.eloDelta, 0);
+    const elo = battleElo();
     return `<section class="section-panel battle-arena">
         <p class="eyebrow">MogBattle</p>
         <h1>MogBattle</h1>
-        <p class="muted">Сравни своё загруженное лицо с контрольным профилем. Чем точнее фото и свежий анализ, тем честнее баттл.</p>
+        <p class="muted">Соперник выпадает случайно. Чем точнее фото и свежее анализ, тем честнее баттл.</p>
         <div class="battle-stats">
             <div class="battle-stat"><small>ELO</small><strong>${elo}</strong></div>
-            <div class="battle-stat"><small>Ранг</small><strong>${elo >= 930 ? "Mog A" : elo >= 850 ? "Mog B" : "Mog C"}</strong></div>
+            <div class="battle-stat"><small>Ранг</small><strong>${battleRank(elo)}</strong></div>
             <div class="battle-stat"><small>Winrate</small><strong>${winrate}%</strong></div>
         </div>
         <div class="battle-stage">
@@ -974,17 +1149,19 @@ function renderBattle() {
             </div>
             <div class="versus-core">VS</div>
             <div class="fighter-card">
-                <div class="fighter-photo has-photo"><img src="${opponent.image}" alt=""></div>
+                ${state.battleResult ? `<div class="fighter-photo has-photo"><img src="${opponent.image}" alt=""></div>
                 <strong>${opponent.name}</strong>
-                <small>${opponent.tier} · ${opponent.score}/100</small>
+                <small>${opponent.tier} · ${opponent.score}/100</small>` : `<div class="fighter-photo mystery"><span class="brand-mark">?</span></div>
+                <strong>Случайный соперник</strong>
+                <small>откроется после запуска</small>`}
             </div>
         </div>
-        <div class="opponent-strip">${battleOpponents.map(item => `<button class="opponent-chip ${item.id === opponent.id ? "active" : ""}" data-battle-opponent="${item.id}">
-            <img src="${item.image}" alt=""><span>${item.name}</span><small>${item.score}/100</small>
-        </button>`).join("")}</div>
         <button class="button primary ${state.busy.battle ? "processing" : ""}" data-action="run-battle" ${state.busy.battle ? "disabled" : ""}>${buttonContent("Запустить баттл", "Сравниваю...", "swords", state.busy.battle)}</button>
         ${state.battleResult ? renderBattleResult() : ""}
-        <div class="zone-list">${state.battleHistory.slice(0, 4).map(item => `<div class="zone-card"><strong>${escapeHtml(item.name)}<em>${item.result === "win" ? "победа" : item.result === "tie" ? "ничья" : "поражение"}</em></strong><p class="muted">${item.ownScore} vs ${item.opponentScore} · ELO ${item.eloDelta > 0 ? "+" : ""}${item.eloDelta}</p></div>`).join("")}</div>
+        <div class="battle-history-board">
+            <p class="eyebrow">История боёв</p>
+            ${state.battleHistory.length ? `<div class="battle-history-grid">${state.battleHistory.slice(0, 6).map(battleHistoryCard).join("")}</div>` : `<div class="admin-empty">История появится после первого баттла.</div>`}
+        </div>
     </section>`;
 }
 
@@ -999,6 +1176,17 @@ function renderBattleResult() {
         </div>
         <p class="muted">${escapeHtml(result.advice)}</p>
     </div>`;
+}
+
+function battleHistoryCard(item) {
+    return `<article class="battle-history-card">
+        <img src="${item.image || selectedBattleOpponent().image}" alt="">
+        <div>
+            <strong>${escapeHtml(item.name)}</strong>
+            <small>${item.result === "win" ? "победа" : item.result === "tie" ? "ничья" : "поражение"} · ${item.ownScore}:${item.opponentScore}</small>
+        </div>
+        <em>${item.eloDelta > 0 ? "+" : ""}${item.eloDelta}</em>
+    </article>`;
 }
 
 function renderAdmin() {
@@ -1235,11 +1423,63 @@ function metric(name, value, hint = "") {
     return `<div class="metric-row"><strong>${escapeHtml(name)}</strong><div class="track"><span class="fill" style="width:${safeValue}%"></span></div><span>${escapeHtml(String(hint || safeValue))}</span></div>`;
 }
 
+function waterTrackerHtml(context = "nutrition") {
+    const water = ensureWaterState();
+    const percent = pct(water.amountMl, water.targetMl);
+    const disabled = context === "plan" && !canEditPlanDay(selectedPlanDay());
+    return `<div class="water-tracker ${context}">
+        <div class="water-head">
+            <strong>Вода</strong>
+            <span>${water.amountMl} мл / ${water.targetMl} мл</span>
+        </div>
+        <div class="track water-track"><span class="fill water-fill" style="width:${percent}%"></span></div>
+        <div class="water-actions">
+            <button class="button secondary" data-action="add-water" data-amount="250" ${disabled ? "disabled" : ""}>+250</button>
+            <button class="button secondary" data-action="add-water" data-amount="500" ${disabled ? "disabled" : ""}>+500</button>
+            <button class="button secondary" data-action="add-water" data-amount="1000" ${disabled ? "disabled" : ""}>+1 л</button>
+            <button class="button quiet" data-action="reset-water" ${disabled ? "disabled" : ""}>Сброс</button>
+        </div>
+    </div>`;
+}
+
+function ensureWaterState() {
+    const key = bodylabDayKey();
+    if (!state.water || typeof state.water !== "object") {
+        state.water = { enabled: false, amountMl: 0, targetMl: 2500, dayKey: key };
+    }
+    if (state.water.dayKey !== key) {
+        state.water = { ...state.water, amountMl: 0, dayKey: key };
+        saveWaterState();
+    }
+    state.water.targetMl = Math.max(1200, Number(state.water.targetMl || 2500));
+    state.water.amountMl = Math.max(0, Number(state.water.amountMl || 0));
+    return state.water;
+}
+
+function addWater(amount) {
+    const water = ensureWaterState();
+    water.enabled = true;
+    water.amountMl = Math.min(water.targetMl + 1000, water.amountMl + Math.max(0, amount));
+    saveWaterState();
+    render();
+}
+
+function resetWater() {
+    const water = ensureWaterState();
+    water.amountMl = 0;
+    saveWaterState();
+    render();
+}
+
 function featureCard(feature) {
     const hot = ["gpt", "body", "battle"].includes(feature.id);
+    const remaining = featureCooldownRemaining(feature.id);
+    const timer = remaining > 0
+        ? `<small class="feature-timer" ${countdownAttrs(Date.now() + remaining, "Обновление через ")}>Обновление через ${formatDuration(remaining)}</small>`
+        : "";
     return `<button class="feature-card ${hot ? "is-hot" : ""}" data-view="${viewForFeature(feature.id)}">
         <span class="icon-shell"><i data-lucide="${feature.icon}"></i></span>
-        <span><strong>${feature.title}</strong><small>${feature.subtitle}</small></span>
+        <span><strong>${feature.title}</strong><small>${feature.subtitle}</small>${timer}</span>
     </button>`;
 }
 
@@ -1293,15 +1533,6 @@ function bindView() {
         state.files[kind] = file;
         state.previews[kind] = file ? URL.createObjectURL(file) : null;
         if (!file) localStorage.removeItem(storageKey(`preview-${kind}`));
-        if (kind === "body") {
-            state.bodyAnalysis = null;
-            saveBodyState();
-        }
-        if (kind.startsWith("tool-")) {
-            const toolId = kind.slice(5);
-            delete state.toolReports[toolId];
-            saveToolState();
-        }
         render();
         if (file) {
             persistPreview(kind, file);
@@ -1312,6 +1543,18 @@ function bindView() {
         state.selectedGuide = button.dataset.guide;
         render();
         resetScroll();
+    }));
+    document.querySelectorAll("[data-guide-category]").forEach(button => button.addEventListener("click", () => {
+        state.selectedGuideCategory = button.dataset.guideCategory;
+        state.selectedGuide = null;
+        render();
+        resetScroll();
+    }));
+    document.querySelectorAll("[data-guide-track]").forEach(button => button.addEventListener("click", () => {
+        state.guideTrack = button.dataset.guideTrack;
+        state.selectedGuideCategory = "";
+        state.selectedGuide = null;
+        render();
     }));
     document.querySelectorAll("[data-goal]").forEach(button => button.addEventListener("click", () => {
         const profile = bodyProfileFromInputs();
@@ -1383,11 +1626,27 @@ async function handleAction(event) {
     if (action === "open-payment") {
         openPayment();
     }
+    if (action === "analysis-next") {
+        state.analysisStep = Math.min(3, Math.max(1, Number(state.analysisStep) || 1) + 1);
+        render();
+        resetScroll();
+    }
+    if (action === "analysis-back") {
+        state.analysisStep = Math.max(1, Math.max(1, Number(state.analysisStep) || 1) - 1);
+        render();
+        resetScroll();
+    }
     if (action === "run-analysis") {
         await runAnalysis();
     }
     if (action === "add-meal") {
         await addMeal();
+    }
+    if (action === "add-water") {
+        addWater(Number(event.currentTarget.dataset.amount || 0));
+    }
+    if (action === "reset-water") {
+        resetWater();
     }
     if (action === "ask-gpt") {
         setView("gpt");
@@ -1402,10 +1661,22 @@ async function handleAction(event) {
     if (action === "run-tool-analysis") {
         await runToolAnalysis(event.currentTarget.dataset.toolId);
     }
+    if (action === "add-tool-to-plan") {
+        addToolToPlan(event.currentTarget.dataset.toolId);
+    }
     if (action === "back-guides") {
         state.selectedGuide = null;
         render();
         resetScroll();
+    }
+    if (action === "back-guide-categories") {
+        state.selectedGuide = null;
+        state.selectedGuideCategory = "";
+        render();
+        resetScroll();
+    }
+    if (action === "add-guide-to-plan") {
+        addGuideToPlan(event.currentTarget.dataset.guideId);
     }
     if (action === "save-plan-report") {
         savePlanReport();
@@ -1479,16 +1750,25 @@ function renderNav() {
 
 async function runAnalysis() {
     if (state.busy.analysis) return;
+    if (!canRunFaceAnalysis()) {
+        if (!isPro() && hasUsedFreeFaceAnalysis()) {
+            openPayment();
+        } else {
+            toast("Следующий скан откроется позже.");
+        }
+        return;
+    }
     const form = new FormData();
-    if (state.files.front) form.append("front", state.files.front);
-    if (state.files.side) form.append("side", state.files.side);
-    if (!state.files.front && !state.files.side) {
+    appendImageToForm(form, "front", state.files.front, state.previews.front);
+    appendImageToForm(form, "side", state.files.side, state.previews.side);
+    if (!state.files.front && !state.files.side && !state.previews.front && !state.previews.side) {
         toast("Добавь хотя бы одно фото.");
         return;
     }
     try {
         const previous = state.analysis;
         state.busy.analysis = true;
+        state.analysisStep = 4;
         render();
         toast("Сканирую фото...");
         const response = await fetch(apiPath("/api/analysis"), {
@@ -1498,8 +1778,11 @@ async function runAnalysis() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Не удалось провести анализ");
+        data.createdAt = new Date().toISOString();
         data.comparison = scanComparison(previous, data, "face");
         state.analysis = data;
+        if (state.boot) state.boot.hasFaceAnalysis = true;
+        state.analysisStep = 4;
         state.analysisHistory = [compactScan(data), ...state.analysisHistory].slice(0, 8);
         ensurePlanStartKey();
         state.selectedPlanDay = currentPlanDay();
@@ -1516,6 +1799,10 @@ async function runAnalysis() {
 
 async function runBodyAnalysis() {
     if (state.busy.body) return;
+    if (analysisCooldownRemaining("body") > 0) {
+        toast("Следующая оценка формы откроется позже.");
+        return;
+    }
     const hasPhoto = Boolean(state.files.body || state.previews.body);
     state.bodyProfile = bodyProfileFromInputs();
     saveBodyProfile();
@@ -1553,6 +1840,10 @@ async function runBodyAnalysis() {
 async function runToolAnalysis(id) {
     const tool = toolWorkspaces[id];
     if (!tool || state.busy.tool) return;
+    if (analysisCooldownRemaining(id) > 0) {
+        toast("Следующий анализ откроется позже.");
+        return;
+    }
     const kind = toolUploadKind(id);
     if (!(state.files[kind] || state.previews[kind])) {
         toast("Сначала загрузи фото.");
@@ -1564,10 +1855,10 @@ async function runToolAnalysis(id) {
         render();
         toast("Анализирую фото...");
         let report = null;
-        if (state.files[kind]) {
+        if (state.files[kind] || state.previews[kind]) {
             try {
                 const form = new FormData();
-                form.append("photo", state.files[kind]);
+                appendImageToForm(form, "photo", state.files[kind], state.previews[kind]);
                 const response = await fetch(apiPath(`/api/analysis/tools/${id}`), {
                     method: "POST",
                     headers: { "X-Telegram-Init-Data": tg?.initData || "" },
@@ -1643,13 +1934,20 @@ async function sendChat(text) {
         assistant.pending = false;
         assistant.text = error.message;
         saveChatHistory();
-        render();
+        paintChatMessage(assistant);
         scrollChatToBottom(true);
     } finally {
         assistant.pending = false;
         state.busy.chat = false;
         saveChatHistory();
-        render();
+        if (state.view === "gpt" && paintChatMessage(assistant)) {
+            unlockChatComposer();
+            paintChatQuota();
+            scrollChatToBottom(true);
+        } else {
+            render();
+            scrollChatToBottom(true);
+        }
     }
 }
 
@@ -1684,6 +1982,11 @@ async function loadNutrition() {
 
 async function addMeal() {
     if (state.busy.meal) return;
+    if (!isPro()) {
+        toast("AI-оценка КБЖУ доступна с BodyPro.");
+        openPayment();
+        return;
+    }
     const input = document.querySelector("#mealInput");
     const text = input?.value?.trim();
     if (!text) {
@@ -1968,6 +2271,8 @@ function storageKey(name) {
 function loadLocalState() {
     state.chat = readJson(storageKey("chat"), []);
     state.planReports = readJson(storageKey("plan-reports"), {});
+    state.water = readJson(storageKey("water"), state.water);
+    ensureWaterState();
     state.analysis = readJson(storageKey("analysis"), null);
     state.analysisHistory = readJson(storageKey("analysis-history"), []);
     state.previews.front = localStorage.getItem(storageKey("preview-front")) || null;
@@ -2050,6 +2355,28 @@ function createPreviewDataUrl(file) {
     });
 }
 
+function appendImageToForm(form, field, file, preview) {
+    if (file) {
+        form.append(field, file);
+        return;
+    }
+    const blob = dataUrlToBlob(preview);
+    if (blob) form.append(field, blob, `${field}.jpg`);
+}
+
+function dataUrlToBlob(dataUrl) {
+    if (!dataUrl || !dataUrl.startsWith("data:")) return null;
+    const parts = dataUrl.split(",");
+    if (parts.length < 2) return null;
+    const mime = /data:([^;]+)/.exec(parts[0])?.[1] || "image/jpeg";
+    const binary = atob(parts[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+}
+
 function saveChatHistory() {
     if (!state.boot?.user) return;
     const compact = state.chat
@@ -2088,6 +2415,11 @@ function chatHistoryForAi() {
 function savePlanReports() {
     if (!state.boot?.user) return;
     localStorage.setItem(storageKey("plan-reports"), JSON.stringify(state.planReports));
+}
+
+function saveWaterState() {
+    if (!state.boot?.user) return;
+    localStorage.setItem(storageKey("water"), JSON.stringify(state.water));
 }
 
 function defaultPlanDay() {
@@ -2172,20 +2504,30 @@ function planPhase(day) {
 
 function planReport(day) {
     const key = String(day);
-    const phase = planPhase(day);
     if (!state.planReports[key]) {
         state.planReports[key] = {
-            tasks: Array(phase.tasks.length).fill(false),
+            tasks: [],
+            extraTasks: [],
             mood: "",
             note: "",
             completion: 0,
             updatedAt: ""
         };
     }
-    if (state.planReports[key].tasks.length !== phase.tasks.length) {
-        state.planReports[key].tasks = phase.tasks.map((_, index) => Boolean(state.planReports[key].tasks[index]));
+    if (!Array.isArray(state.planReports[key].extraTasks)) {
+        state.planReports[key].extraTasks = [];
+    }
+    const tasks = planTasksForReport(day, state.planReports[key]);
+    if (state.planReports[key].tasks.length !== tasks.length) {
+        state.planReports[key].tasks = tasks.map((_, index) => Boolean(state.planReports[key].tasks[index]));
     }
     return state.planReports[key];
+}
+
+function planTasksForReport(day, report) {
+    const base = planPhase(day).tasks;
+    const extra = Array.isArray(report?.extraTasks) ? report.extraTasks : [];
+    return [...base, ...extra];
 }
 
 function togglePlanTask(index, checked) {
@@ -2218,6 +2560,49 @@ function savePlanReport() {
     toast("Отчёт дня сохранён.");
 }
 
+function addToolToPlan(id) {
+    const tool = toolWorkspaces[id];
+    if (!tool) return;
+    if (!isPro()) {
+        openPayment();
+        return;
+    }
+    if (id === "water") {
+        const water = ensureWaterState();
+        water.enabled = true;
+        saveWaterState();
+    }
+    addExtraTaskToToday(`${tool.title}: ${tool.tasks?.[0] || "закрепить фокус анализа"}`);
+}
+
+function addGuideToPlan(id) {
+    const guide = guideLibrary.find(item => item.id === id);
+    if (!guide) return;
+    addExtraTaskToToday(`Гайд: применить одно правило “${guide.title}”`);
+}
+
+function addExtraTaskToToday(task) {
+    if (!isPro()) {
+        openPayment();
+        return;
+    }
+    const day = currentPlanDay();
+    const report = planReport(day);
+    report.extraTasks = Array.isArray(report.extraTasks) ? report.extraTasks : [];
+    if (!report.extraTasks.includes(task)) {
+        report.extraTasks.push(task);
+        report.tasks.push(false);
+        report.updatedAt = new Date().toISOString();
+        report.completion = report.tasks.filter(Boolean).length / report.tasks.length;
+        savePlanReports();
+        toast("Добавлено в сегодняшний день.");
+    } else {
+        toast("Этот фокус уже есть в сегодняшнем дне.");
+    }
+    state.selectedPlanDay = day;
+    setView("plan");
+}
+
 function renderPlanReportList() {
     const reports = Object.entries(state.planReports)
         .filter(([, report]) => report.updatedAt)
@@ -2233,7 +2618,8 @@ function renderPlanReportList() {
 }
 
 function selectedBattleOpponent() {
-    const opponent = battleOpponents.find(item => item.id === state.battleOpponent);
+    const id = state.battleResult?.opponentId || state.battleOpponent;
+    const opponent = battleOpponents.find(item => item.id === id);
     if (opponent) return opponent;
     state.battleOpponent = battleOpponents[0].id;
     return battleOpponents[0];
@@ -2255,7 +2641,8 @@ async function runBattle() {
     state.busy.battle = true;
     render();
     await delay(720);
-    const opponent = selectedBattleOpponent();
+    const opponent = randomBattleOpponent();
+    state.battleOpponent = opponent.id;
     const swing = Math.round((Math.random() - 0.5) * 8);
     const finalOwn = Math.max(1, Math.min(100, ownScore + swing));
     const delta = finalOwn - opponent.score;
@@ -2263,6 +2650,9 @@ async function runBattle() {
     const eloDelta = result === "win" ? 18 : result === "tie" ? 4 : -12;
     state.battleResult = {
         result,
+        opponentId: opponent.id,
+        image: opponent.image,
+        tier: opponent.tier,
         name: opponent.name,
         ownScore: finalOwn,
         opponentScore: opponent.score,
@@ -2275,6 +2665,25 @@ async function runBattle() {
     saveBattleState();
     render();
     toast(result === "win" ? "Победа в баттле." : result === "tie" ? "Почти ровно." : "Есть что усилить.");
+}
+
+function randomBattleOpponent() {
+    if (battleOpponents.length <= 1) return battleOpponents[0];
+    const lastId = state.battleResult?.opponentId || "";
+    const pool = battleOpponents.filter(item => item.id !== lastId);
+    return pool[Math.floor(Math.random() * pool.length)] || battleOpponents[0];
+}
+
+function battleElo() {
+    return 800 + state.battleHistory.reduce((sum, item) => sum + item.eloDelta, 0);
+}
+
+function battleRank(elo) {
+    if (elo >= 1080) return "Магнит";
+    if (elo >= 1000) return "Фотогеник";
+    if (elo >= 920) return "Контур";
+    if (elo >= 840) return "База";
+    return "Новичок";
 }
 
 function battleAdvice(result, delta) {
@@ -2367,6 +2776,17 @@ function paintChatQuota() {
     node.classList.toggle("low", usage.remaining <= 10);
 }
 
+function unlockChatComposer() {
+    const input = document.querySelector("#chatInput");
+    const button = document.querySelector("#chatForm .send-button");
+    if (input) input.disabled = false;
+    if (button) {
+        button.disabled = false;
+        button.innerHTML = `<i data-lucide="send"></i>`;
+    }
+    refreshIcons();
+}
+
 function chatCharDelay(char) {
     if (char === "\n") return CHAT_PUNCTUATION_DELAY;
     if (/[.!?]/.test(char)) return CHAT_PUNCTUATION_DELAY;
@@ -2381,7 +2801,13 @@ function scrollChatToBottom(force = false) {
     if (!force && distance > 180) return;
     if (chatScrollFrame) cancelAnimationFrame(chatScrollFrame);
     chatScrollFrame = requestAnimationFrame(() => {
+        if (force) list.style.scrollBehavior = "auto";
         list.scrollTop = list.scrollHeight;
+        if (force) {
+            requestAnimationFrame(() => {
+                list.style.scrollBehavior = "";
+            });
+        }
         chatScrollFrame = null;
     });
 }
@@ -2436,6 +2862,79 @@ function selectedPlan() {
 
 function isPro() {
     return Boolean(state.boot?.subscription?.active);
+}
+
+function canRunFaceAnalysis() {
+    if (!isPro() && hasUsedFreeFaceAnalysis()) return false;
+    return analysisCooldownRemaining("face") <= 0;
+}
+
+function isStyleMetric(name) {
+    return /стиль|style|подач|гардероб|образ/i.test(String(name || ""));
+}
+
+function hasUsedFreeFaceAnalysis() {
+    return Boolean(state.analysis || state.boot?.hasFaceAnalysis);
+}
+
+function featureCooldownRemaining(id) {
+    if (id === "face") return analysisCooldownRemaining("face");
+    if (id === "body") return analysisCooldownRemaining("body");
+    if (toolWorkspaces[id]) return analysisCooldownRemaining(id);
+    return 0;
+}
+
+function analysisCooldownRemaining(id) {
+    const timestamp = analysisTimestamp(id);
+    if (!timestamp) return 0;
+    const cooldown = id === "body" ? BODY_ANALYSIS_COOLDOWN_MS : PHOTO_ANALYSIS_COOLDOWN_MS;
+    return Math.max(0, timestamp + cooldown - Date.now());
+}
+
+function analysisTimestamp(id) {
+    if (id === "face") return Date.parse(state.analysis?.createdAt || "") || 0;
+    if (id === "body") return Date.parse(state.bodyAnalysis?.createdAt || "") || 0;
+    return Date.parse(state.toolReports?.[id]?.createdAt || "") || 0;
+}
+
+function cooldownNotice(id) {
+    const remaining = analysisCooldownRemaining(id);
+    if (remaining <= 0) return "";
+    return `<div class="cooldown-notice">
+        <i data-lucide="timer"></i>
+        <span>Следующее обновление через <b ${countdownAttrs(Date.now() + remaining)}>${formatDuration(remaining)}</b></span>
+    </div>`;
+}
+
+function countdownAttrs(until, prefix = "") {
+    return `data-countdown-until="${Math.round(until)}" data-countdown-prefix="${escapeHtml(prefix)}"`;
+}
+
+function startCountdownClock() {
+    if (countdownTimer) return;
+    countdownTimer = window.setInterval(updateCountdowns, 1000);
+}
+
+function updateCountdowns() {
+    let shouldRefresh = false;
+    document.querySelectorAll("[data-countdown-until]").forEach(node => {
+        const remaining = Math.max(0, Number(node.dataset.countdownUntil || 0) - Date.now());
+        node.textContent = `${node.dataset.countdownPrefix || ""}${formatDuration(remaining)}`;
+        if (remaining <= 0) shouldRefresh = true;
+    });
+    if (shouldRefresh && state.view !== "gpt") {
+        render();
+    }
+}
+
+function formatDuration(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    if (days > 0) return `${days}д ${String(hours).padStart(2, "0")}ч`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function pct(value, target) {
