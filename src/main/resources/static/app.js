@@ -32,6 +32,8 @@ const state = {
     previews: { front: null, side: null, body: null },
     analysis: null,
     nutrition: null,
+    nutritionHistory: null,
+    nutritionHistoryOpen: false,
     admin: null,
     chatUsage: { limit: BODYGPT_DAILY_LIMIT, used: 0, remaining: BODYGPT_DAILY_LIMIT },
     accessNotice: null,
@@ -43,6 +45,7 @@ const state = {
     selectedGuideCategory: "",
     guideTrack: "soft",
     analysisStep: 1,
+    planTools: [],
     water: { enabled: false, amountMl: 0, targetMl: 2500, dayKey: "" },
     bodyProfile: null,
     bodyAnalysis: null,
@@ -200,19 +203,21 @@ const toolWorkspaces = {
     }
 };
 
+const maleAcademyImages = ["assets/battle/fake-neo.jpg", "assets/battle/fake-soft.jpg", "assets/battle/fake-raw.jpg"];
+
 const guideCategories = [
-    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets", image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=80" },
-    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors", image: "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=80" },
-    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye", image: "https://images.unsplash.com/photo-1512316609839-ce289d3eba0a?auto=format&fit=crop&w=1200&q=80" },
-    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles", image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=1200&q=80" },
-    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity", image: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80" },
-    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture", image: "assets/battle/fake-neo.jpg" },
-    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot", image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80" },
-    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile", image: "https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=1200&q=80" },
-    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line", image: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&w=1200&q=80" },
-    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert", image: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1200&q=80" },
-    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus", image: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&w=1200&q=80" },
-    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell", image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80" }
+    { id: "skin", track: "soft", tag: "Softmaxxing", title: "Кожа", icon: "droplets", image: maleAcademyImage(0) },
+    { id: "hair", track: "soft", tag: "Softmaxxing", title: "Волосы", icon: "scissors", image: maleAcademyImage(1) },
+    { id: "brows", track: "soft", tag: "Softmaxxing", title: "Брови", icon: "scan-eye", image: maleAcademyImage(2) },
+    { id: "style", track: "soft", tag: "Softmaxxing", title: "Стиль", icon: "sparkles", image: maleAcademyImage(0) },
+    { id: "posture", track: "soft", tag: "Softmaxxing", title: "Осанка", icon: "activity", image: maleAcademyImage(1) },
+    { id: "photo", track: "soft", tag: "Softmaxxing", title: "Фото", icon: "aperture", image: maleAcademyImage(2) },
+    { id: "jaw", track: "hard", tag: "Hardmaxxing", title: "Жевательные мышцы", icon: "circle-dot", image: maleAcademyImage(0) },
+    { id: "ortho", track: "hard", tag: "Hardmaxxing", title: "Ортодонтия", icon: "smile", image: maleAcademyImage(1) },
+    { id: "bite", track: "hard", tag: "Hardmaxxing", title: "Прикус", icon: "scan-line", image: maleAcademyImage(2) },
+    { id: "operations", track: "hard", tag: "Hardmaxxing", title: "Операции", icon: "shield-alert", image: maleAcademyImage(0) },
+    { id: "implants", track: "hard", tag: "Hardmaxxing", title: "Импланты", icon: "badge-plus", image: maleAcademyImage(1) },
+    { id: "body", track: "hard", tag: "Hardmaxxing", title: "Тело", icon: "dumbbell", image: maleAcademyImage(2) }
 ];
 
 const guideSeeds = {
@@ -670,6 +675,7 @@ function renderBodyMax() {
         createdAt: state.bodyAnalysis.createdAt
     } : null;
     return `<section class="section-panel body-max">
+        ${planToggleHtml("body")}
         <p class="eyebrow">Body Max</p>
         <h1>Форма тела</h1>
         <p class="muted">Загрузи фото формы, выбери цель и получи план по питанию, тренировкам и контрольным замерам.</p>
@@ -703,6 +709,7 @@ function renderBodyMax() {
             <label>Талия, см<input id="bodyWaist" inputmode="decimal" value="${profile.waist}"></label>
             <label>Тренировок/нед.<input id="bodyWorkouts" inputmode="numeric" value="${profile.workouts}"></label>
         </div>
+        ${planNudgeHtml("body")}
         <button class="button primary ${state.busy.body ? "processing" : ""}" data-action="run-body-analysis" ${state.busy.body || remaining > 0 ? "disabled" : ""}>${state.busy.body ? buttonContent("Оценить форму", "Оцениваю форму...", "scan-line", true) : `<i data-lucide="scan-line"></i><span ${remaining > 0 ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${remaining > 0 ? `Обновление через ${formatDuration(remaining)}` : "Оценить форму"}</span>`}</button>
     </section>
     ${assessment ? renderBodyResult(assessment) : `<section class="section-panel body-plan-empty">
@@ -732,6 +739,7 @@ function renderBodyResult(assessment) {
                 <p class="eyebrow">Контроль</p>
                 <h3>Отчётность</h3>
                 <ol class="routine-list">${assessment.tracking.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+                <button class="button secondary" data-action="toggle-plan-tool" data-tool-id="body"><i data-lucide="${planToolActive("body") ? "check" : "plus"}"></i>${planToolActive("body") ? "BodyMax в плане" : "Добавить BodyMax в план"}</button>
             </article>
         </div>
     </section>`;
@@ -760,10 +768,12 @@ function renderToolWorkspace(id) {
     const busy = state.busy.tool === id;
     const remaining = analysisCooldownRemaining(id);
     return `<section class="section-panel tool-workspace">
+        ${planToggleHtml(id)}
         <span class="icon-shell"><i data-lucide="${tool.icon}"></i></span>
         <p class="eyebrow">${tool.eyebrow}</p>
         <h1>${tool.title}</h1>
         <p class="muted">${tool.text}</p>
+        ${planNudgeHtml(id)}
         ${report ? cooldownNotice(id) : ""}
         <div class="upload-grid">
             ${uploadTile(kind, tool.uploadTitle || "Фото для анализа", tool.uploadSubtitle || "хорошее освещение")}
@@ -784,8 +794,8 @@ function renderToolWorkspace(id) {
         <button class="button primary ${busy ? "processing" : ""}" data-action="run-tool-analysis" data-tool-id="${id}" ${busy || remaining > 0 ? "disabled" : ""}>${busy ? buttonContent("Оценить", "Анализирую...", "scan-line", true) : `<i data-lucide="scan-line"></i><span ${remaining > 0 ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${remaining > 0 ? `Обновление через ${formatDuration(remaining)}` : "Оценить"}</span>`}</button>
         ${id === "water" ? `<div class="coach-card water-enable-card">
             <i data-lucide="waves"></i>
-            <div><strong>Трекер воды</strong><p class="muted">Добавь воду в дневной маршрут и питание: появится отдельная полоска прогресса.</p></div>
-            <button class="button secondary" data-action="add-tool-to-plan" data-tool-id="water">${state.water.enabled ? "Открыть" : "Добавить"}</button>
+            <div><strong>Трекер воды</strong><p class="muted">Закрепи воду в маршруте: полоска прогресса появится в плане и питании.</p></div>
+            <button class="button secondary" data-action="toggle-plan-tool" data-tool-id="water">${planToolActive("water") ? "Убрать" : "Добавить"}</button>
         </div>` : ""}
     </section>
     ${report ? renderToolReport(id, tool, report) : `<section class="section-panel tool-empty-state">
@@ -813,7 +823,7 @@ function renderToolReport(id, tool, report) {
                 <p class="eyebrow">Связать</p>
                 <h3>В дневной план</h3>
                 <p class="muted">${escapeHtml(report.planText || "Зафиксируй этот блок в отчёте дня и вернись к нему после нового фото.")}</p>
-                <button class="button secondary" data-action="add-tool-to-plan" data-tool-id="${id}"><i data-lucide="route"></i>Добавить в день</button>
+                <button class="button secondary" data-action="add-tool-to-plan" data-tool-id="${id}"><i data-lucide="route"></i>Закрепить в плане</button>
             </article>
         </div>
     </section>`;
@@ -843,15 +853,23 @@ function renderPlan() {
     const phase = planPhase(day);
     const report = planReport(day);
     const dayTasks = planTasksForReport(day, report);
-    const done = report.tasks.filter(Boolean).length;
-    const savedReports = Object.values(state.planReports).filter(item => item.updatedAt);
+    const workout = bodyWorkoutForPlanDay(day);
+    const completion = planDayCompletion(day, report, workout);
+    const dayProgress = completion.percent;
+    const savedReports = Object.entries(state.planReports).filter(([, item]) => item.updatedAt);
     const progress = savedReports.length
-        ? Math.round(savedReports.reduce((sum, item) => sum + (item.completion || 0), 0) / savedReports.length * 100)
+        ? Math.round(savedReports.reduce((sum, [dayKey, item]) => sum + planDayCompletion(Number(dayKey), item).ratio, 0) / savedReports.length * 100)
         : 0;
+    const activeTools = activePlanTools();
     return `<section class="section-panel plan-hero">
         <div>
             <p class="eyebrow">60 дней</p>
             <h1>Дневной маршрут</h1>
+            <div class="plan-hero-kpis">
+                <span><b>День ${today}</b> текущий</span>
+                <span><b>${dayProgress}%</b> день</span>
+                <span><b>${activeTools.length}</b> трекеров</span>
+            </div>
             <div class="phase-pills">${planPhases.map(item => `<button class="phase-pill ${day >= item.from && day <= item.to ? "active" : ""}" data-plan-day="${item.from}">
                 <span>${item.from}-${item.to}</span>${escapeHtml(item.title)}
             </button>`).join("")}</div>
@@ -861,6 +879,7 @@ function renderPlan() {
         </div>
     </section>
     <section class="section-panel day-board ${canEdit ? "" : "locked"}">
+        ${renderPlanDayRail(day, today)}
         <div class="day-board-head">
             <button class="icon-button ghost" data-plan-day="${Math.max(1, day - 1)}" ${day <= 1 ? "disabled" : ""} aria-label="Предыдущий день"><i data-lucide="chevron-left"></i></button>
             <div>
@@ -870,9 +889,11 @@ function renderPlan() {
             </div>
             <button class="icon-button ghost" data-plan-day="${Math.min(60, day + 1)}" ${day >= 60 ? "disabled" : ""} aria-label="Следующий день"><i data-lucide="chevron-right"></i></button>
         </div>
-        ${canEdit ? `<div class="coach-card"><i data-lucide="sparkles"></i><div><strong>Фокус дня</strong><p class="muted">Отметь выполненное и вечером добавь короткий отчёт. Следующий шаг откроется завтра.</p></div></div>` : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>Только просмотр</strong><p class="muted">${day < today ? "Этот день уже закрыт для отчёта." : "Этот день можно посмотреть заранее, а отметки откроются позже."}</p></div></div>`}
-        ${state.water.enabled ? waterTrackerHtml("plan") : ""}
-        <div class="day-progress-line"><span style="width:${Math.round((done / dayTasks.length) * 100)}%"></span></div>
+        ${canEdit ? `<div class="coach-card"><i data-lucide="sparkles"></i><div><strong>Фокус дня</strong><p class="muted">Отметь выполненное, добавь короткий отчёт и оставь BodyLab следующую точку для корректировки.</p></div></div>` : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>${day < today ? "День завершён" : "Предпросмотр"}</strong><p class="muted">${day < today ? "Можно перечитать отчёт и выводы, но менять отметки уже нельзя." : "Можно заранее посмотреть маршрут и подготовиться к следующему блоку."}</p></div></div>`}
+        ${renderPlanToolShelf(day, canEdit)}
+        ${renderPlanNutritionTargets()}
+        ${workout ? renderPlanWorkout(workout, report, canEdit) : ""}
+        <div class="day-progress-line"><span style="width:${dayProgress}%"></span></div>
         <div class="task-list">
             ${dayTasks.map((task, index) => `<label class="task-item ${report.tasks[index] ? "done" : ""}">
                 <input type="checkbox" data-plan-task="${index}" ${report.tasks[index] ? "checked" : ""} ${canEdit ? "" : "disabled"}>
@@ -884,7 +905,7 @@ function renderPlan() {
             ${["свежо", "норм", "устал", "рывок"].map(mood => `<button class="chip ${report.mood === mood ? "active" : ""}" data-plan-mood="${mood}" ${canEdit ? "" : "disabled"}>${mood}</button>`).join("")}
         </div>
         <textarea class="note-input" id="planNote" rows="4" placeholder="Короткий отчёт дня: что сделал, что сработало, что мешало" ${canEdit ? "" : "disabled"}>${escapeHtml(report.note || "")}</textarea>
-        <button class="button primary" data-action="save-plan-report" ${canEdit ? "" : "disabled"}><i data-lucide="clipboard-check"></i>${canEdit ? "Сохранить отчёт дня" : "Отчёт откроется в свой день"}</button>
+        <button class="button primary" data-action="save-plan-report" ${canEdit ? "" : "disabled"}><i data-lucide="clipboard-check"></i>${canEdit ? "Сохранить отчёт дня" : "Отчёт доступен в активный день"}</button>
     </section>
     <section class="section-panel report-board">
         <p class="eyebrow">Отчётность</p>
@@ -917,16 +938,24 @@ function renderGpt() {
 
 function renderNutrition() {
     const data = state.nutrition || { calories: 0, targetCalories: 2200, protein: 0, fat: 0, carbs: 0, logs: [] };
+    const targets = nutritionTargets(data);
     return `<section class="section-panel">
-        <p class="eyebrow">Питание</p>
-        <h1>Дневник КБЖУ</h1>
+        <div class="nutrition-head">
+            <div>
+                <p class="eyebrow">Питание</p>
+                <h1>Дневник КБЖУ</h1>
+            </div>
+            <button class="button quiet nutrition-history-button" data-toggle-nutrition-history><i data-lucide="history"></i>История</button>
+        </div>
         <p class="muted">Считай калории и БЖУ, воду и базовую отчётность по рациону.</p>
-        <div class="nutrition-ring"><div><strong>${data.calories}</strong><span class="muted"> / ${data.targetCalories} ккал</span></div></div>
-        ${metric("Белки", pct(data.protein, 150), `${data.protein} г`)}
-        ${metric("Жиры", pct(data.fat, 70), `${data.fat} г`)}
-        ${metric("Углеводы", pct(data.carbs, 250), `${data.carbs} г`)}
+        ${targets.source === "body" ? `<div class="coach-card nutrition-sync"><i data-lucide="activity"></i><div><strong>Цель из BodyMax</strong><p class="muted">${targets.label}</p></div></div>` : ""}
+        <div class="nutrition-ring"><div><strong>${data.calories}</strong><span class="muted"> / ${targets.calories} ккал</span></div></div>
+        ${metric("Белки", pct(data.protein, targets.protein), `${data.protein} г / ${targets.protein} г`)}
+        ${metric("Жиры", pct(data.fat, targets.fat), `${data.fat} г / ${targets.fat} г`)}
+        ${metric("Углеводы", pct(data.carbs, targets.carbs), `${data.carbs} г / ${targets.carbs} г`)}
         ${state.water.enabled ? waterTrackerHtml("nutrition") : ""}
     </section>
+    ${state.nutritionHistoryOpen ? renderNutritionHistory(targets) : ""}
     <section class="section-panel">
         <h2>Добавить приём пищи</h2>
         <div class="meal-controls">
@@ -940,6 +969,20 @@ function renderNutrition() {
             ${state.busy.meal ? `<div class="coach-card"><span class="mini-loader"></span><div><strong>Разбираю приём пищи</strong><p class="muted">Считаю калории и БЖУ, затем добавлю запись в дневник.</p></div></div>` : ""}
             <div class="zone-list">${(data.logs || []).map(log => `<div class="zone-card"><strong>${escapeHtml(log.title)}<em>${log.calories} ккал</em></strong><p class="muted">Б ${log.protein} · Ж ${log.fat} · У ${log.carbs}</p></div>`).join("")}</div>
         </div>
+    </section>`;
+}
+
+function renderNutritionHistory(targets) {
+    const days = state.nutritionHistory?.days || [];
+    return `<section class="section-panel nutrition-history">
+        <p class="eyebrow">История</p>
+        <h2>КБЖУ по дням</h2>
+        ${state.nutritionHistoryOpen && !state.nutritionHistory ? `<div class="coach-card"><span class="mini-loader"></span><div><strong>Поднимаю историю</strong><p class="muted">Собираю дни питания и прогресс по КБЖУ.</p></div></div>` : days.length ? `<div class="nutrition-history-list">${days.map(day => `<article class="nutrition-day-card">
+            <div><strong>${formatDayLabel(day.dayKey)}</strong><small>${day.meals} приёмов</small></div>
+            <span>${day.calories} / ${targets.calories} ккал</span>
+            <div class="track"><span class="fill" style="width:${pct(day.calories, targets.calories)}%"></span></div>
+            <p class="muted">Б ${day.protein} · Ж ${day.fat} · У ${day.carbs}</p>
+        </article>`).join("")}</div>` : `<div class="admin-empty">История появится после первых записей в дневнике.</div>`}
     </section>`;
 }
 
@@ -1005,7 +1048,7 @@ function renderGuideDetail(guide) {
         </article>`).join("")}
         ${guideProtocol(guide)}</div>
         <div class="analysis-followup">
-            <button class="button primary" data-action="add-guide-to-plan" data-guide-id="${guide.id}"><i data-lucide="route"></i>Добавить в день</button>
+            <button class="button primary" data-action="add-guide-to-plan" data-guide-id="${guide.id}"><i data-lucide="route"></i>Внести в маршрут</button>
             <button class="button secondary" data-action="ask-gpt" data-prompt="Помоги применить гайд: ${escapeHtml(guide.title)}"><i data-lucide="brain"></i>Спросить BodyGPT</button>
         </div>
     </section>`;
@@ -1058,6 +1101,10 @@ function guidesForCategory(categoryId) {
     return guideLibrary.filter(guide => guide.categoryId === categoryId);
 }
 
+function maleAcademyImage(index = 0) {
+    return maleAcademyImages[Math.abs(index) % maleAcademyImages.length];
+}
+
 function guideIntroFor(category, title) {
     const intro = {
         skin: "Уход, который делает лицо свежее без хаотичных покупок и резких экспериментов.",
@@ -1078,17 +1125,8 @@ function guideIntroFor(category, title) {
 
 function guideImageFor(category, index) {
     if (index === 1) return category.image;
-    const pool = {
-        skin: ["https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=1200&q=80"],
-        hair: ["https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1622288432450-277d0fef5ed6?auto=format&fit=crop&w=1200&q=80"],
-        style: ["https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1506629905607-d405d7d3b0d2?auto=format&fit=crop&w=1200&q=80"],
-        posture: ["https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80"],
-        photo: ["assets/battle/fake-soft.jpg", "assets/battle/fake-raw.jpg"],
-        body: ["https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80"]
-    };
-    const fallback = ["https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1200&q=80", "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80"];
-    const images = pool[category.id] || fallback;
-    return images[(index - 2) % images.length];
+    const categoryOffset = guideCategories.findIndex(item => item.id === category.id);
+    return maleAcademyImage(categoryOffset + index);
 }
 
 function guideSectionsFor(category, title) {
@@ -1423,6 +1461,37 @@ function metric(name, value, hint = "") {
     return `<div class="metric-row"><strong>${escapeHtml(name)}</strong><div class="track"><span class="fill" style="width:${safeValue}%"></span></div><span>${escapeHtml(String(hint || safeValue))}</span></div>`;
 }
 
+function nutritionTargets(data = state.nutrition || {}) {
+    if (planToolActive("body")) {
+        const profile = state.bodyAnalysis?.profile || bodyProfile();
+        const assessment = state.bodyAnalysis || bodyAssessment(profile);
+        const fat = Math.max(45, Math.round(profile.weight * 0.8));
+        const carbs = Math.max(90, Math.round((assessment.calories - assessment.protein * 4 - fat * 9) / 4));
+        return {
+            source: "body",
+            label: `${assessment.planTitle}: ${assessment.calories} ккал и ${assessment.protein} г белка`,
+            calories: assessment.calories,
+            protein: assessment.protein,
+            fat,
+            carbs
+        };
+    }
+    return {
+        source: "base",
+        label: "Базовая цель",
+        calories: Number(data.targetCalories || 2200),
+        protein: 150,
+        fat: 70,
+        carbs: 250
+    };
+}
+
+function formatDayLabel(dayKey) {
+    const [year, month, day] = String(dayKey || "").split("-");
+    if (!day || !month) return escapeHtml(dayKey || "День");
+    return `${day}.${month}.${String(year || "").slice(2)}`;
+}
+
 function waterTrackerHtml(context = "nutrition") {
     const water = ensureWaterState();
     const percent = pct(water.amountMl, water.targetMl);
@@ -1437,7 +1506,6 @@ function waterTrackerHtml(context = "nutrition") {
             <button class="button secondary" data-action="add-water" data-amount="250" ${disabled ? "disabled" : ""}>+250</button>
             <button class="button secondary" data-action="add-water" data-amount="500" ${disabled ? "disabled" : ""}>+500</button>
             <button class="button secondary" data-action="add-water" data-amount="1000" ${disabled ? "disabled" : ""}>+1 л</button>
-            <button class="button quiet" data-action="reset-water" ${disabled ? "disabled" : ""}>Сброс</button>
         </div>
     </div>`;
 }
@@ -1585,6 +1653,9 @@ function bindView() {
     document.querySelectorAll("[data-plan-task]").forEach(input => input.addEventListener("change", () => {
         togglePlanTask(Number(input.dataset.planTask), input.checked);
     }));
+    document.querySelectorAll("[data-workout-exercise]").forEach(input => input.addEventListener("change", () => {
+        togglePlanWorkoutExercise(Number(input.dataset.workoutExercise), input.checked);
+    }));
     document.querySelectorAll("[data-plan-mood]").forEach(button => button.addEventListener("click", () => {
         if (!canEditPlanDay(selectedPlanDay())) {
             toast("Настроение можно менять только сегодня.");
@@ -1602,6 +1673,13 @@ function bindView() {
         saveBattleState();
         render();
     }));
+    document.querySelector("[data-toggle-nutrition-history]")?.addEventListener("click", async () => {
+        state.nutritionHistoryOpen = !state.nutritionHistoryOpen;
+        render();
+        if (state.nutritionHistoryOpen && !state.nutritionHistory) {
+            await loadNutritionHistory();
+        }
+    });
 }
 
 async function handleAction(event) {
@@ -1663,6 +1741,9 @@ async function handleAction(event) {
     }
     if (action === "add-tool-to-plan") {
         addToolToPlan(event.currentTarget.dataset.toolId);
+    }
+    if (action === "toggle-plan-tool") {
+        togglePlanTool(event.currentTarget.dataset.toolId);
     }
     if (action === "back-guides") {
         state.selectedGuide = null;
@@ -1980,6 +2061,15 @@ async function loadNutrition() {
     }
 }
 
+async function loadNutritionHistory() {
+    try {
+        state.nutritionHistory = await api("/api/nutrition/history", { method: "GET" });
+        if (state.view === "nutrition") render();
+    } catch (error) {
+        toast(error.message);
+    }
+}
+
 async function addMeal() {
     if (state.busy.meal) return;
     if (!isPro()) {
@@ -2006,6 +2096,7 @@ async function addMeal() {
             delay(420)
         ]);
         state.nutrition = nutrition;
+        state.nutritionHistory = null;
         render();
         toast("Добавлено в дневник.");
     } catch (error) {
@@ -2271,8 +2362,14 @@ function storageKey(name) {
 function loadLocalState() {
     state.chat = readJson(storageKey("chat"), []);
     state.planReports = readJson(storageKey("plan-reports"), {});
+    state.planTools = readJson(storageKey("plan-tools"), []);
+    if (!Array.isArray(state.planTools)) state.planTools = [];
     state.water = readJson(storageKey("water"), state.water);
     ensureWaterState();
+    if (state.water.enabled && !state.planTools.includes("water")) {
+        state.planTools.push("water");
+        savePlanTools();
+    }
     state.analysis = readJson(storageKey("analysis"), null);
     state.analysisHistory = readJson(storageKey("analysis-history"), []);
     state.previews.front = localStorage.getItem(storageKey("preview-front")) || null;
@@ -2417,6 +2514,11 @@ function savePlanReports() {
     localStorage.setItem(storageKey("plan-reports"), JSON.stringify(state.planReports));
 }
 
+function savePlanTools() {
+    if (!state.boot?.user) return;
+    localStorage.setItem(storageKey("plan-tools"), JSON.stringify(state.planTools));
+}
+
 function saveWaterState() {
     if (!state.boot?.user) return;
     localStorage.setItem(storageKey("water"), JSON.stringify(state.water));
@@ -2468,9 +2570,9 @@ function planDayLabel(day) {
 }
 
 function dayStatusLabel(day, today) {
-    if (day === today) return "Сегодняшний фокус";
-    if (day < today) return "Прошедший день";
-    return "Следующий этап";
+    if (day === today) return "Сегодня в работе";
+    if (day < today) return "День завершён";
+    return "Ближайший этап";
 }
 
 function canEditPlanDay(day) {
@@ -2498,6 +2600,92 @@ function startPlanClock() {
     }, 60000);
 }
 
+function renderPlanDayRail(day, today) {
+    const start = Math.max(1, Math.min(60 - 6, day - 3));
+    const days = Array.from({ length: 7 }, (_, index) => start + index);
+    return `<div class="plan-day-rail">${days.map(item => `<button class="plan-day-chip ${item === day ? "active" : ""} ${item === today ? "today" : ""}" data-plan-day="${item}">
+        <small>${planDayLabel(item)}</small>
+        <strong>${item}</strong>
+    </button>`).join("")}</div>`;
+}
+
+function renderPlanToolShelf(day, canEdit) {
+    const tools = activePlanTools();
+    if (!tools.length) return "";
+    return `<div class="plan-tool-shelf">${tools.map(id => {
+        if (id === "water") return waterTrackerHtml("plan");
+        if (id === "body") {
+            const workout = bodyWorkoutForPlanDay(day);
+            return `<article class="plan-tool-card body">
+                <span class="icon-shell"><i data-lucide="activity"></i></span>
+                <div><strong>Body Max</strong><small>${workout ? "Тренировка в маршруте" : "Тренировочный блок появится по ритму плана"}</small></div>
+                <button class="icon-button ghost" data-action="toggle-plan-tool" data-tool-id="body" aria-label="Убрать Body Max"><i data-lucide="check"></i></button>
+            </article>`;
+        }
+        const tool = toolWorkspaces[id];
+        if (!tool) return "";
+        return `<article class="plan-tool-card">
+            <span class="icon-shell"><i data-lucide="${tool.icon}"></i></span>
+            <div><strong>${escapeHtml(tool.title)}</strong><small>${escapeHtml(tool.tasks?.[0] || "Фокус закреплён")}</small></div>
+            <button class="icon-button ghost" data-action="toggle-plan-tool" data-tool-id="${id}" aria-label="Убрать из плана"><i data-lucide="check"></i></button>
+        </article>`;
+    }).join("")}</div>`;
+}
+
+function renderPlanNutritionTargets() {
+    if (!planToolActive("body")) return "";
+    const targets = nutritionTargets();
+    return `<article class="plan-nutrition-card">
+        <div>
+            <p class="eyebrow">КБЖУ</p>
+            <h3>${targets.calories} ккал</h3>
+            <p class="muted">${targets.label}</p>
+        </div>
+        <div class="nutrition-mini-grid">
+            <span><b>${targets.protein}г</b> белки</span>
+            <span><b>${targets.fat}г</b> жиры</span>
+            <span><b>${targets.carbs}г</b> углеводы</span>
+        </div>
+    </article>`;
+}
+
+function bodyWorkoutForPlanDay(day) {
+    if (!planToolActive("body")) return null;
+    const weekday = ((day - 1) % 7) + 1;
+    const slot = { 1: 0, 3: 1, 5: 2 }[weekday];
+    if (slot === undefined) return null;
+    const assessment = state.bodyAnalysis || bodyAssessment(bodyProfile());
+    const workout = assessment.trainingDays[slot];
+    return workout ? { ...workout, routeDay: day, slot } : null;
+}
+
+function renderPlanWorkout(workout, report, canEdit) {
+    const done = Array.isArray(report.workoutDone) ? report.workoutDone : [];
+    return `<article class="plan-workout-card">
+        <div class="training-day-head">
+            <div><p class="eyebrow">Body Max</p><strong>${escapeHtml(workout.day)} · ${escapeHtml(workout.focus)}</strong></div>
+            <span>день ${workout.routeDay}</span>
+        </div>
+        <div class="exercise-list">${workout.exercises.map((exercise, index) => `<label class="exercise-row plan-exercise ${done[index] ? "done" : ""}">
+            <input type="checkbox" data-workout-exercise="${index}" ${done[index] ? "checked" : ""} ${canEdit ? "" : "disabled"}>
+            <b>${escapeHtml(exercise.name)}</b>
+            <em>${escapeHtml(exercise.sets)}</em>
+            <small>${escapeHtml(exercise.technique)}</small>
+        </label>`).join("")}</div>
+    </article>`;
+}
+
+function planDayCompletion(day, report, workout = bodyWorkoutForPlanDay(day)) {
+    const tasks = planTasksForReport(day, report);
+    const taskDone = tasks.reduce((sum, _, index) => sum + (report.tasks?.[index] ? 1 : 0), 0);
+    const exercises = workout?.exercises || [];
+    const workoutDone = exercises.reduce((sum, _, index) => sum + (report.workoutDone?.[index] ? 1 : 0), 0);
+    const total = tasks.length + exercises.length;
+    const done = taskDone + workoutDone;
+    const ratio = total ? done / total : 0;
+    return { done, total, ratio, percent: Math.round(ratio * 100) };
+}
+
 function planPhase(day) {
     return planPhases.find(phase => day >= phase.from && day <= phase.to) || planPhases[0];
 }
@@ -2508,6 +2696,7 @@ function planReport(day) {
         state.planReports[key] = {
             tasks: [],
             extraTasks: [],
+            workoutDone: [],
             mood: "",
             note: "",
             completion: 0,
@@ -2516,6 +2705,9 @@ function planReport(day) {
     }
     if (!Array.isArray(state.planReports[key].extraTasks)) {
         state.planReports[key].extraTasks = [];
+    }
+    if (!Array.isArray(state.planReports[key].workoutDone)) {
+        state.planReports[key].workoutDone = [];
     }
     const tasks = planTasksForReport(day, state.planReports[key]);
     if (state.planReports[key].tasks.length !== tasks.length) {
@@ -2539,7 +2731,25 @@ function togglePlanTask(index, checked) {
     }
     const report = planReport(day);
     report.tasks[index] = checked;
-    report.completion = report.tasks.filter(Boolean).length / report.tasks.length;
+    report.completion = planDayCompletion(day, report).ratio;
+    report.updatedAt = new Date().toISOString();
+    savePlanReports();
+    render();
+}
+
+function togglePlanWorkoutExercise(index, checked) {
+    const day = selectedPlanDay();
+    if (!canEditPlanDay(day)) {
+        toast("Тренировку можно отмечать только в её день.");
+        render();
+        return;
+    }
+    const report = planReport(day);
+    const workout = bodyWorkoutForPlanDay(day);
+    if (!workout) return;
+    report.workoutDone = workout.exercises.map((_, itemIndex) => Boolean(report.workoutDone?.[itemIndex]));
+    report.workoutDone[index] = checked;
+    report.completion = planDayCompletion(day, report, workout).ratio;
     report.updatedAt = new Date().toISOString();
     savePlanReports();
     render();
@@ -2553,26 +2763,85 @@ function savePlanReport() {
     }
     const report = planReport(day);
     report.note = document.querySelector("#planNote")?.value?.trim() || "";
-    report.completion = report.tasks.filter(Boolean).length / report.tasks.length;
+    report.completion = planDayCompletion(day, report).ratio;
     report.updatedAt = new Date().toISOString();
     savePlanReports();
     render();
     toast("Отчёт дня сохранён.");
 }
 
-function addToolToPlan(id) {
-    const tool = toolWorkspaces[id];
-    if (!tool) return;
+function planToolActive(id) {
+    if (id === "water" && state.water?.enabled) return true;
+    return Array.isArray(state.planTools) && state.planTools.includes(id);
+}
+
+function activePlanTools() {
+    const ids = Array.isArray(state.planTools) ? state.planTools.slice() : [];
+    if (state.water?.enabled && !ids.includes("water")) ids.push("water");
+    return ids.filter((id, index) => ids.indexOf(id) === index);
+}
+
+function planToolTitle(id) {
+    if (id === "body") return "Body Max";
+    return toolWorkspaces[id]?.title || id;
+}
+
+function planToolIcon(id) {
+    if (id === "body") return "activity";
+    return toolWorkspaces[id]?.icon || "sparkles";
+}
+
+function planToggleHtml(id) {
+    const active = planToolActive(id);
+    return `<button class="plan-toggle-fab ${active ? "active" : ""}" data-action="toggle-plan-tool" data-tool-id="${id}" aria-label="${active ? "Убрать из плана" : "Добавить в план"}">
+        <i data-lucide="${active ? "check" : "plus"}"></i>
+    </button>`;
+}
+
+function planNudgeHtml(id) {
+    if (planToolActive(id)) return "";
+    return `<div class="plan-nudge" aria-hidden="true"><span>в план</span><i data-lucide="arrow-up-right"></i></div>`;
+}
+
+function setPlanTool(id, enabled) {
+    state.planTools = Array.isArray(state.planTools) ? state.planTools : [];
+    if (enabled && !state.planTools.includes(id)) {
+        state.planTools.push(id);
+    }
+    if (!enabled) {
+        state.planTools = state.planTools.filter(item => item !== id);
+    }
+    if (id === "water") {
+        const water = ensureWaterState();
+        water.enabled = enabled;
+        saveWaterState();
+    }
+    savePlanTools();
+}
+
+function togglePlanTool(id) {
+    if (!id) return;
     if (!isPro()) {
         openPayment();
         return;
     }
-    if (id === "water") {
-        const water = ensureWaterState();
-        water.enabled = true;
-        saveWaterState();
+    const next = !planToolActive(id);
+    setPlanTool(id, next);
+    render();
+    toast(next ? `${planToolTitle(id)} добавлен в план.` : `${planToolTitle(id)} убран из плана.`);
+}
+
+function addToolToPlan(id) {
+    const tool = toolWorkspaces[id];
+    if (!tool && id !== "body") return;
+    if (!isPro()) {
+        openPayment();
+        return;
     }
-    addExtraTaskToToday(`${tool.title}: ${tool.tasks?.[0] || "закрепить фокус анализа"}`);
+    setPlanTool(id, true);
+    state.selectedPlanDay = currentPlanDay();
+    toast(`${planToolTitle(id)} закреплён в плане.`);
+    setView("plan");
 }
 
 function addGuideToPlan(id) {
@@ -2593,9 +2862,9 @@ function addExtraTaskToToday(task) {
         report.extraTasks.push(task);
         report.tasks.push(false);
         report.updatedAt = new Date().toISOString();
-        report.completion = report.tasks.filter(Boolean).length / report.tasks.length;
+        report.completion = planDayCompletion(day, report).ratio;
         savePlanReports();
-        toast("Добавлено в сегодняшний день.");
+        toast("Фокус добавлен в маршрут дня.");
     } else {
         toast("Этот фокус уже есть в сегодняшнем дне.");
     }
@@ -2612,7 +2881,7 @@ function renderPlanReportList() {
         return `<div class="admin-empty">Пока нет сохранённых отчётов. Отметь задачи дня и нажми “Сохранить отчёт дня”.</div>`;
     }
     return reports.map(([day, report]) => `<div class="zone-card report-card">
-        <strong>День ${day}<em>${Math.round((report.completion || 0) * 100)}%</em></strong>
+        <strong>День ${day}<em>${planDayCompletion(Number(day), report).percent}%</em></strong>
         <p class="muted">${escapeHtml(report.mood ? `${report.mood}. ` : "")}${escapeHtml(report.note || "Заметка не добавлена.")}</p>
     </div>`).join("");
 }

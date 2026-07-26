@@ -40,6 +40,34 @@ public class NutritionRepository {
                 telegramId);
     }
 
+    public List<NutritionDay> history(long telegramId) {
+        return jdbc.query("""
+                        SELECT CAST(created_at AS DATE) AS day_key,
+                               COUNT(*) AS meals,
+                               SUM(calories) AS calories,
+                               SUM(protein) AS protein,
+                               SUM(fat) AS fat,
+                               SUM(carbs) AS carbs
+                        FROM nutrition_logs
+                        WHERE telegram_id = ?
+                        GROUP BY CAST(created_at AS DATE)
+                        ORDER BY day_key DESC
+                        LIMIT 21
+                        """,
+                (rs, rowNum) -> new NutritionDay(
+                        rs.getString("day_key"),
+                        rs.getInt("meals"),
+                        rs.getInt("calories"),
+                        rs.getInt("protein"),
+                        rs.getInt("fat"),
+                        rs.getInt("carbs")
+                ),
+                telegramId);
+    }
+
     public record NutritionLog(String mealType, String title, int calories, int protein, int fat, int carbs) {
+    }
+
+    public record NutritionDay(String dayKey, int meals, int calories, int protein, int fat, int carbs) {
     }
 }

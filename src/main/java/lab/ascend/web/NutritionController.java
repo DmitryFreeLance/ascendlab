@@ -35,6 +35,12 @@ public class NutritionController {
         return nutrition.summary(user.telegramId());
     }
 
+    @GetMapping("/history")
+    public Map<String, Object> history(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
+        UserProfile user = currentUser.require(initData);
+        return nutrition.history(user.telegramId());
+    }
+
     @PostMapping
     public Map<String, Object> add(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData,
                                    @RequestBody MealRequest request) {

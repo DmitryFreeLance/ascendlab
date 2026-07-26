@@ -41,6 +41,10 @@ public class NutritionService {
         );
     }
 
+    public Map<String, Object> history(long telegramId) {
+        return Map.of("days", nutrition.history(telegramId));
+    }
+
     private AiService.NutritionEstimate heuristic(String text) {
         String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
         int calories = 260;

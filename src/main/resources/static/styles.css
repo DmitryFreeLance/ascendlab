@@ -1557,6 +1557,31 @@ h3 {
     gap: 16px;
 }
 
+.plan-hero-kpis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 12px;
+}
+
+.plan-hero-kpis span {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 7px 11px;
+    border: 1px solid rgba(40, 121, 184, 0.12);
+    background: rgba(255, 255, 255, 0.62);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 820;
+}
+
+.plan-hero-kpis b {
+    color: var(--ink);
+}
+
 .phase-pills {
     display: flex;
     gap: 8px;
@@ -1640,6 +1665,152 @@ h3 {
 .day-board {
     display: grid;
     gap: 14px;
+}
+
+.plan-day-rail {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 7px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    border-radius: var(--radius);
+    background: rgba(247, 251, 255, 0.56);
+    box-shadow: var(--shadow-soft);
+}
+
+.plan-day-chip {
+    min-width: 0;
+    min-height: 58px;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.68);
+    color: var(--muted);
+}
+
+.plan-day-chip small {
+    font-size: 10px;
+    font-weight: 850;
+}
+
+.plan-day-chip strong {
+    color: var(--ink);
+    font-size: 18px;
+}
+
+.plan-day-chip.today {
+    border-color: rgba(100, 224, 176, .46);
+}
+
+.plan-day-chip.active {
+    border-color: rgba(247, 205, 78, .78);
+    background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,247,215,.82));
+    box-shadow: 0 14px 34px rgba(247, 205, 78, .14);
+}
+
+.plan-tool-shelf {
+    display: grid;
+    gap: 10px;
+}
+
+.plan-tool-card,
+.plan-nutrition-card,
+.plan-workout-card {
+    border: 1px solid rgba(40, 121, 184, 0.13);
+    border-radius: var(--radius);
+    background:
+        radial-gradient(circle at 96% 8%, rgba(116, 215, 255, 0.12), transparent 32%),
+        rgba(255, 255, 255, 0.66);
+    box-shadow: var(--shadow-soft);
+}
+
+.plan-tool-card {
+    min-height: 72px;
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) 42px;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+}
+
+.plan-tool-card small {
+    display: block;
+    color: var(--muted);
+    line-height: 1.35;
+}
+
+.plan-tool-card .icon-shell {
+    width: 46px;
+    height: 46px;
+}
+
+.plan-tool-card.body {
+    border-color: rgba(247, 205, 78, .36);
+    background:
+        radial-gradient(circle at 0% 0%, rgba(247, 205, 78, .18), transparent 34%),
+        rgba(255, 255, 255, .68);
+}
+
+.plan-nutrition-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr);
+    gap: 12px;
+    align-items: center;
+    padding: 16px;
+}
+
+.plan-nutrition-card h3,
+.plan-nutrition-card p {
+    margin: 0;
+}
+
+.nutrition-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.nutrition-mini-grid span {
+    min-height: 58px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .66);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 820;
+}
+
+.nutrition-mini-grid b {
+    color: var(--ink);
+    font-size: 18px;
+}
+
+.plan-workout-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border-color: rgba(247, 205, 78, .34);
+}
+
+.plan-exercise {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    cursor: pointer;
+}
+
+.plan-exercise input {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--mint);
+}
+
+.plan-exercise.done {
+    border-color: rgba(100, 224, 176, .52);
+    background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(230,255,247,.76));
 }
 
 .coach-card {
@@ -2030,6 +2201,28 @@ h3 {
     animation: ringFloat 4.6s ease-in-out infinite;
 }
 
+.nutrition-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+}
+
+.nutrition-head h1,
+.nutrition-head p {
+    margin-bottom: 0;
+}
+
+.nutrition-history-button {
+    min-height: 38px;
+    padding-inline: 12px;
+    border-radius: 999px;
+}
+
+.nutrition-sync {
+    margin-top: 12px;
+}
+
 .nutrition-ring strong {
     font-size: 62px;
     line-height: 1;
@@ -2039,6 +2232,45 @@ h3 {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+}
+
+.nutrition-history {
+    display: grid;
+    gap: 12px;
+}
+
+.nutrition-history-list {
+    display: grid;
+    gap: 10px;
+}
+
+.nutrition-day-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, .66);
+    box-shadow: var(--shadow-soft);
+}
+
+.nutrition-day-card small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+}
+
+.nutrition-day-card > span {
+    color: var(--blue-deep);
+    font-weight: 950;
+}
+
+.nutrition-day-card .track,
+.nutrition-day-card p {
+    grid-column: 1 / -1;
+    margin: 0;
 }
 
 .water-tracker {
@@ -2076,8 +2308,14 @@ h3 {
 
 .water-actions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.water-actions .button {
+    min-height: 38px;
+    padding: 7px 8px;
+    font-size: 13px;
 }
 
 .water-enable-card {
@@ -2546,6 +2784,65 @@ h3 {
     background:
         linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(230, 255, 247, 0.82)),
         rgba(255, 255, 255, 0.78);
+}
+
+.plan-toggle-fab {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(247, 205, 78, .48);
+    border-radius: 50%;
+    color: #4d3b00;
+    background:
+        radial-gradient(circle at 30% 22%, rgba(255,255,255,.96), transparent 34%),
+        linear-gradient(135deg, #fff8cf, #f7cd4e);
+    box-shadow: 0 16px 42px rgba(247, 205, 78, .26);
+    z-index: 4;
+    animation: plusPulse 2.4s ease-in-out infinite;
+}
+
+.plan-toggle-fab.active {
+    color: #0d6d50;
+    border-color: rgba(100, 224, 176, .56);
+    background:
+        radial-gradient(circle at 30% 22%, rgba(255,255,255,.96), transparent 34%),
+        linear-gradient(135deg, #eafff7, #64e0b0);
+    animation: checkGlow 3.2s ease-in-out infinite;
+}
+
+.plan-toggle-fab svg {
+    width: 23px;
+    height: 23px;
+}
+
+.plan-nudge {
+    position: absolute;
+    top: 70px;
+    right: 18px;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+    border-radius: 999px;
+    color: var(--blue-deep);
+    background: rgba(255, 255, 255, .78);
+    border: 1px solid rgba(40, 121, 184, .14);
+    box-shadow: var(--shadow-soft);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    animation: nudgeFloat 1.45s ease-in-out infinite;
+}
+
+.plan-nudge svg {
+    width: 15px;
+    height: 15px;
 }
 
 .tool-scan-card {
@@ -3277,6 +3574,35 @@ h3 {
     }
 }
 
+@keyframes plusPulse {
+    0%, 100% {
+        transform: translateY(0) rotate(0deg) scale(1);
+        box-shadow: 0 16px 42px rgba(247, 205, 78, .24);
+    }
+    50% {
+        transform: translateY(-2px) rotate(7deg) scale(1.04);
+        box-shadow: 0 22px 54px rgba(247, 205, 78, .34);
+    }
+}
+
+@keyframes checkGlow {
+    0%, 100% {
+        box-shadow: 0 16px 42px rgba(100, 224, 176, .20);
+    }
+    50% {
+        box-shadow: 0 20px 54px rgba(100, 224, 176, .34);
+    }
+}
+
+@keyframes nudgeFloat {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(-7px);
+    }
+}
+
 @keyframes ringFloat {
     0%, 100% {
         transform: translateY(0);
@@ -3643,6 +3969,45 @@ h3 {
         grid-template-columns: 1fr;
     }
 
+    .plan-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .plan-radar {
+        justify-self: center;
+    }
+
+    .plan-day-rail {
+        gap: 5px;
+        padding: 6px;
+        overflow-x: auto;
+        grid-template-columns: repeat(7, minmax(54px, 1fr));
+    }
+
+    .plan-day-chip {
+        min-height: 52px;
+    }
+
+    .plan-nutrition-card {
+        grid-template-columns: 1fr;
+    }
+
+    .nutrition-mini-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .plan-toggle-fab {
+        top: 14px;
+        right: 14px;
+        width: 44px;
+        height: 44px;
+    }
+
+    .plan-nudge {
+        top: 62px;
+        right: 12px;
+    }
+
     .phase-pills {
         margin-top: 4px;
     }
@@ -3820,7 +4185,7 @@ h3 {
     }
 
     .water-actions {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .water-enable-card {
