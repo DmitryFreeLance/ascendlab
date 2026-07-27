@@ -46,6 +46,23 @@ CREATE TABLE IF NOT EXISTS analysis_reports (
     telegram_id BIGINT NOT NULL,
     score INT NOT NULL,
     report_json CLOB NOT NULL,
+    community_eligible BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE analysis_reports ADD COLUMN IF NOT EXISTS community_eligible BOOLEAN DEFAULT FALSE NOT NULL;
+
+CREATE TABLE IF NOT EXISTS face_analysis_wallet (
+    telegram_id BIGINT PRIMARY KEY,
+    credits INT DEFAULT 0 NOT NULL,
+    intro_used BOOLEAN DEFAULT FALSE NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS face_analysis_grants (
+    payment_id VARCHAR(64) PRIMARY KEY,
+    telegram_id BIGINT NOT NULL,
+    product_code VARCHAR(32) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

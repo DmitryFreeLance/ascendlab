@@ -93,20 +93,90 @@ public class AiService {
         }
     }
 
+    public Optional<NutritionEstimate> estimateMealPhotoWithAi(String dataUrl, String text, String mealType) {
+        if (!properties.ai().configured() || dataUrl == null || dataUrl.isBlank()) {
+            return Optional.empty();
+        }
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", """
+                Определи еду и примерный размер порции по фотографии тарелки.
+                Учитывай видимые соусы, масло, напитки и гарниры. Не изображай точность весов:
+                выбери реалистичную центральную оценку и не занижай скрытые калории.
+                Если еда не видна или фото непригодно, верни photoValid=false.
+                Ответь строго JSON без markdown:
+                {"photoValid":true,"title":"короткое название","calories":0,
+                "protein":0,"fat":0,"carbs":0,"confidence":0,"assumptions":["..."]}
+                Тип приёма: %s. Комментарий пользователя: %s
+                """.formatted(mealType, text == null ? "" : text)));
+        content.add(Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)));
+        Map<String, Object> request = Map.of(
+                "model", "gemini-2.5-flash",
+                "stream", false,
+                "temperature", BigDecimal.valueOf(0.1),
+                "messages", List.of(Map.of("role", "user", "content", content))
+        );
+        try {
+            String response = postKie(request);
+            String contentText = objectMapper.readTree(response)
+                    .path("choices").path(0).path("message").path("content").asText();
+            JsonNode json = objectMapper.readTree(stripCodeBlock(contentText));
+            if (!json.path("photoValid").asBoolean(false)) {
+                throw new IllegalStateException("На фото не удалось уверенно распознать тарелку с едой.");
+            }
+            return Optional.of(new NutritionEstimate(
+                    json.path("title").asText(text == null || text.isBlank() ? "Приём пищи" : text),
+                    json.path("calories").asInt(0),
+                    json.path("protein").asInt(0),
+                    json.path("fat").asInt(0),
+                    json.path("carbs").asInt(0)
+            ));
+        } catch (IllegalStateException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("Kie.ai meal photo estimation failed: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Optional<JsonNode> analyzeFaceWithAi(List<String> dataUrls, String gender, int age) {
         if (!properties.ai().configured() || dataUrls.isEmpty()) {
             return Optional.empty();
         }
         List<Map<String, Object>> content = new ArrayList<>();
         content.add(Map.of("type", "text", "text", """
-                Ты эксперт по внешности, уходу за кожей, фотогеничности и softmaxxing.
-                Проанализируй фото бережно, без медицинских формулировок и без утверждений о личности.
-                Это раздел анализа лица: не добавляй стиль, одежду, гардероб, образ и подачу как отдельные метрики.
-                Верни строго JSON:
-                {"score":0,"summary":"...","metrics":[{"name":"гармония","value":0,"hint":"..."}],
-                "zones":[{"name":"кожа","status":"...","advice":"..."}],
+                Ты нейтральный визуальный аналитик внешности BodyLab. Сначала проверь пригодность фото.
+                Лицо должно быть достаточно крупным, открытым, без фильтра, сильного размытия, маски,
+                закрывающей черты руки или экстремального ракурса. Если это зеркало в полный рост,
+                лицо слишком мало или его нельзя оценить, верни photoValid=false и короткую rejectReason.
+                Первое изображение считай анфас, второе — дополнительным профилем. Если на двух
+                изображениях разные люди или второй кадр не помогает анализу лица, верни photoValid=false.
+                Анализируй только видимое, бережно, без медицинских выводов и утверждений о личности.
+                Не добавляй одежду, гардероб и социальную подачу как метрики.
+                Верни строго JSON без markdown:
+                {"photoValid":true,"photoType":"face","qualityScore":0,"rejectReason":"",
+                "score":0,"summary":"конкретный честный вывод",
+                "metrics":[
+                {"id":"harmony","name":"Гармония","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"proportions","name":"Пропорции и симметрия","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"eyes","name":"Зона глаз","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"brows","name":"Брови","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"midface","name":"Средняя треть и нос","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"lips","name":"Губы","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"jaw","name":"Челюсть","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"chin","name":"Подбородок и профиль","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"bone_structure","name":"Костная структура","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"skin","name":"Кожа","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"hair","name":"Прическа","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"contour","name":"Контур лица","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"freshness","name":"Свежесть","value":0,"hint":"...","details":"...","actions":["..."]},
+                {"id":"photo_quality","name":"Качество фото","value":0,"hint":"...","details":"...","actions":["..."]}
+                ],"zones":[{"name":"...","status":"сильная сторона или фокус","advice":"..."}],
                 "routine":["..."]}
-                Метрики должны относиться к лицу и фото: гармония, кожа, углы, свет, свежесть, контур.
+                Шкала строгая и калиброванная: 50 — обычная нейтральная база; 60–69 — заметно сильнее
+                средней базы; 70–79 — сильный результат; 80–89 — редкий очень сильный результат;
+                90+ — только исключительный кадр без существенных слабых зон. Не ставь высокий балл
+                за один удачный свет. Значения опираются только на видимые признаки, одинаковое фото
+                должно получать максимально близкий результат.
                 Пол: %s. Возраст: %d.
                 """.formatted(gender, age)));
         for (String dataUrl : dataUrls) {
@@ -115,7 +185,7 @@ public class AiService {
         Map<String, Object> request = Map.of(
                 "model", "gemini-2.5-flash",
                 "stream", false,
-                "temperature", BigDecimal.valueOf(0.45),
+                "temperature", BigDecimal.valueOf(0.15),
                 "messages", List.of(Map.of("role", "user", "content", content))
         );
         try {
@@ -125,6 +195,100 @@ public class AiService {
             return Optional.of(objectMapper.readTree(stripCodeBlock(contentText)));
         } catch (Exception ex) {
             log.warn("Kie.ai face analysis failed: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<JsonNode> analyzeBodyWithAi(String dataUrl,
+                                                int height,
+                                                int weight,
+                                                int waist,
+                                                String goal,
+                                                String gender,
+                                                int age) {
+        if (!properties.ai().configured() || dataUrl == null || dataUrl.isBlank()) {
+            return Optional.empty();
+        }
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", """
+                Ты нейтральный визуальный аналитик формы тела BodyLab. Сначала проверь фото.
+                Для оценки должны быть видны контуры корпуса минимум от плеч до бёдер, без пуховика,
+                пальто, оверсайз-одежды, сильного зеркального искажения и скрывающей позы.
+                Спортивная или прилегающая одежда допустима. Если контуры скрыты, верни
+                photoValid=false и понятную rejectReason — не придумывай балл.
+                Верни строго JSON без markdown:
+                {"photoValid":true,"photoType":"body","qualityScore":0,"rejectReason":"",
+                "score":0,"title":"...","summary":"...",
+                "metrics":[{"name":"Силуэт","value":0,"hint":"..."},
+                {"name":"Пропорции","value":0,"hint":"..."},
+                {"name":"Мышечный тонус","value":0,"hint":"..."},
+                {"name":"Осанка","value":0,"hint":"..."},
+                {"name":"Качество фото","value":0,"hint":"..."}]}
+                Оцени только видимое. 50 — обычная база, 70 — заметно сильная форма,
+                80 — редкая очень сильная, 90+ — исключительная. Одежда или свет не должны
+                искусственно повышать результат. Данные пользователя нужны для контекста,
+                но не заменяют визуальный анализ: рост %d, вес %d, талия %d, цель %s,
+                пол %s, возраст %d.
+                """.formatted(height, weight, waist, goal, gender, age)));
+        content.add(Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)));
+        Map<String, Object> request = Map.of(
+                "model", "gemini-2.5-flash",
+                "stream", false,
+                "temperature", BigDecimal.valueOf(0.1),
+                "messages", List.of(Map.of("role", "user", "content", content))
+        );
+        try {
+            String response = postKie(request);
+            String contentText = objectMapper.readTree(response)
+                    .path("choices").path(0).path("message").path("content").asText();
+            return Optional.of(objectMapper.readTree(stripCodeBlock(contentText)));
+        } catch (Exception ex) {
+            log.warn("Kie.ai body analysis failed: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public Optional<JsonNode> analyzeBattleWithAi(String ownDataUrl, String opponentDataUrl) {
+        if (!properties.ai().configured() || ownDataUrl == null || opponentDataUrl == null) {
+            return Optional.empty();
+        }
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", """
+                Ты — нейтральный визуальный аналитик BodyLab. Сравни два фото по одной и той же шкале.
+                Первое фото — пользователь, второе — контрольный соперник.
+                Оцени только то, что реально видно: качество кадра, свет, свежесть, ухоженность,
+                гармонию видимых черт и общий визуальный контур. Не делай выводов о личности,
+                здоровье, этничности или социальном статусе. Не завышай и не занижай балл случайно.
+                Верни строго JSON без markdown:
+                {"ownPhotoValid":true,"ownQualityScore":0,"rejectReason":"",
+                "ownScore":0,"opponentScore":0,
+                "ownMetrics":[{"name":"гармония","value":0},{"name":"ухоженность","value":0},
+                {"name":"свежесть","value":0},{"name":"качество кадра","value":0}],
+                "opponentMetrics":[{"name":"гармония","value":0},{"name":"ухоженность","value":0},
+                {"name":"свежесть","value":0},{"name":"качество кадра","value":0}],
+                "summary":"одно конкретное сравнение",
+                "ownStrengths":["..."],"opponentStrengths":["..."],"focus":["..."]}
+                Если первое фото не показывает лицо достаточно крупно и открыто, верни
+                ownPhotoValid=false и rejectReason вместо выдуманного сравнения.
+                Шкала: 50 — обычная база, 70 — заметно сильный результат, 80 — редкий,
+                90+ — исключительный. Баллы должны быть согласованы с метриками и отличаться
+                только при видимой разнице.
+                """));
+        content.add(Map.of("type", "image_url", "image_url", Map.of("url", ownDataUrl)));
+        content.add(Map.of("type", "image_url", "image_url", Map.of("url", opponentDataUrl)));
+        Map<String, Object> request = Map.of(
+                "model", "gemini-2.5-flash",
+                "stream", false,
+                "temperature", BigDecimal.valueOf(0.15),
+                "messages", List.of(Map.of("role", "user", "content", content))
+        );
+        try {
+            String response = postKie(request);
+            String contentText = objectMapper.readTree(response)
+                    .path("choices").path(0).path("message").path("content").asText();
+            return Optional.of(objectMapper.readTree(stripCodeBlock(contentText)));
+        } catch (Exception ex) {
+            log.warn("Kie.ai battle analysis failed: {}", ex.getMessage());
             return Optional.empty();
         }
     }
@@ -148,9 +312,14 @@ public class AiService {
                 Базовые действия: %s
                 Проанализируй фото бережно, конкретно и без медицинских формулировок.
                 Верни строго JSON без markdown:
-                {"score":0,"title":"...","headline":"...","summary":"...",
+                {"photoValid":true,"qualityScore":0,"rejectReason":"","score":0,
+                "title":"...","headline":"...","summary":"...",
                 "metrics":[{"name":"...","value":0,"hint":"..."}],
                 "tasks":["..."],"planText":"..."}
+                Если нужная для раздела зона не видна, кадр размыт, закрыт одеждой или предметом,
+                верни photoValid=false вместо придуманного результата.
+                Шкала: 50 — обычная база, 70 — заметно сильный результат, 80 — редкий,
+                90+ — исключительный. Не повышай балл только за свет, фильтр или ракурс.
                 Пол: %s. Возраст: %d.
                 """.formatted(title, text, String.join(", ", metricNames), String.join("; ", tasks), gender, age)));
         for (String dataUrl : dataUrls) {
@@ -159,7 +328,7 @@ public class AiService {
         Map<String, Object> request = Map.of(
                 "model", "gemini-2.5-flash",
                 "stream", false,
-                "temperature", BigDecimal.valueOf(0.45),
+                "temperature", BigDecimal.valueOf(0.15),
                 "messages", List.of(Map.of("role", "user", "content", content))
         );
         try {

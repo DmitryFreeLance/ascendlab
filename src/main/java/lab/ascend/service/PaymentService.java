@@ -19,6 +19,8 @@ public class PaymentService {
     private final CryptoPayClient cryptoPay;
     private final YooKassaClient yooKassa;
     private final SubscriptionService subscriptions;
+    private final FaceAnalysisAccessService faceAccess;
+    private final PurchaseFulfillmentService fulfillment;
     private final PlanCatalogService plans;
 
     public PaymentService(AppProperties properties,
@@ -27,6 +29,8 @@ public class PaymentService {
                           CryptoPayClient cryptoPay,
                           YooKassaClient yooKassa,
                           SubscriptionService subscriptions,
+                          FaceAnalysisAccessService faceAccess,
+                          PurchaseFulfillmentService fulfillment,
                           PlanCatalogService plans) {
         this.properties = properties;
         this.payments = payments;
@@ -34,11 +38,13 @@ public class PaymentService {
         this.cryptoPay = cryptoPay;
         this.yooKassa = yooKassa;
         this.subscriptions = subscriptions;
+        this.faceAccess = faceAccess;
+        this.fulfillment = fulfillment;
         this.plans = plans;
     }
 
     public PaymentLink createStars(long telegramId, String planCode) {
-        PlanOffer plan = plans.get(planCode);
+        PlanOffer plan = purchasableOffer(telegramId, planCode);
         if (!properties.telegram().configured()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Telegram bot token is required for Stars invoices");
         }
@@ -49,7 +55,7 @@ public class PaymentService {
     }
 
     public PaymentLink createCrypto(long telegramId, String planCode) {
-        PlanOffer plan = plans.get(planCode);
+        PlanOffer plan = purchasableOffer(telegramId, planCode);
         if (!properties.payments().cryptoConfigured()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Crypto Pay token is not configured");
         }
@@ -63,7 +69,7 @@ public class PaymentService {
     }
 
     public PaymentLink createCard(long telegramId, String planCode) {
-        PlanOffer plan = plans.get(planCode);
+        PlanOffer plan = purchasableOffer(telegramId, planCode);
         if (!properties.payments().yookassaConfigured()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "YooKassa credentials are not configured");
@@ -94,7 +100,7 @@ public class PaymentService {
             return;
         }
         payments.markStatus(paymentId, PaymentStatus.PAID, invoice.path("invoice_id").asText(null), invoice.toString());
-        subscriptions.activate(telegramId, plan, "crypto_pay", paymentId);
+        fulfillment.fulfill(telegramId, plan, "crypto_pay", paymentId);
     }
 
     public void handleYooKassaWebhook(String rawBody) {
@@ -125,15 +131,15 @@ public class PaymentService {
         PaymentRepository.PaymentRecord local = payments.findRequired(paymentId);
         PlanOffer plan = plans.get(local.planCode());
         payments.markStatus(paymentId, PaymentStatus.PAID, verified.id(), verified.raw());
-        subscriptions.activate(local.telegramId(), plan, "yookassa", paymentId);
+        fulfillment.fulfill(local.telegramId(), plan, "yookassa", paymentId);
     }
 
     public void activateDemo(long telegramId, String planCode) {
         if (!properties.demoMode()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        PlanOffer plan = plans.get(planCode);
-        subscriptions.activate(telegramId, plan, "demo", "demo");
+        PlanOffer plan = purchasableOffer(telegramId, planCode);
+        fulfillment.fulfill(telegramId, plan, "demo", "demo:" + telegramId + ":" + plan.code());
     }
 
     public PaymentState status(long telegramId, String paymentId) {
@@ -142,8 +148,15 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         reconcileCryptoIfNeeded(local);
+        reconcileYooKassaIfNeeded(local);
         local = payments.findRequired(paymentId);
-        return new PaymentState(paymentId, local.provider(), local.status(), subscriptions.isActive(telegramId));
+        return new PaymentState(
+                paymentId,
+                local.provider(),
+                local.status(),
+                subscriptions.isActive(telegramId),
+                faceAccess.credits(telegramId)
+        );
     }
 
     public Map<String, Object> paymentConfig() {
@@ -160,6 +173,14 @@ public class PaymentService {
         return PaymentStatus.PAID.name().equals(payments.findRequired(paymentId).status());
     }
 
+    private PlanOffer purchasableOffer(long telegramId, String code) {
+        if (FaceAnalysisAccessService.FIRST_PRODUCT.equalsIgnoreCase(code) && !faceAccess.introAvailable(telegramId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Скидка на первую оценку уже использована. Доступна оценка за 99 ₽.");
+        }
+        return plans.get(code);
+    }
+
     private void reconcileCryptoIfNeeded(PaymentRepository.PaymentRecord local) {
         if (!"crypto_pay".equals(local.provider()) || !PaymentStatus.PENDING.name().equals(local.status())) {
             return;
@@ -172,15 +193,36 @@ public class PaymentService {
         if ("paid".equalsIgnoreCase(status)) {
             PlanOffer plan = plans.get(local.planCode());
             payments.markStatus(local.id(), PaymentStatus.PAID, invoice.path("invoice_id").asText(local.externalId()), invoice.toString());
-            subscriptions.activate(local.telegramId(), plan, "crypto_pay", local.id());
+            fulfillment.fulfill(local.telegramId(), plan, "crypto_pay", local.id());
         } else if ("expired".equalsIgnoreCase(status)) {
             payments.markStatus(local.id(), PaymentStatus.CANCELLED, invoice.path("invoice_id").asText(local.externalId()), invoice.toString());
+        }
+    }
+
+    private void reconcileYooKassaIfNeeded(PaymentRepository.PaymentRecord local) {
+        if (!"card".equals(local.provider())
+                || !PaymentStatus.PENDING.name().equals(local.status())
+                || local.externalId() == null
+                || local.externalId().isBlank()) {
+            return;
+        }
+        YooKassaClient.YooKassaPayment verified = yooKassa.getPayment(local.externalId());
+        if ("succeeded".equalsIgnoreCase(verified.status())) {
+            PlanOffer plan = plans.get(local.planCode());
+            payments.markStatus(local.id(), PaymentStatus.PAID, verified.id(), verified.raw());
+            fulfillment.fulfill(local.telegramId(), plan, "yookassa", local.id());
+        } else if ("canceled".equalsIgnoreCase(verified.status())) {
+            payments.markStatus(local.id(), PaymentStatus.CANCELLED, verified.id(), verified.raw());
         }
     }
 
     public record PaymentLink(String paymentId, String provider, String url, String action) {
     }
 
-    public record PaymentState(String paymentId, String provider, String status, boolean subscriptionActive) {
+    public record PaymentState(String paymentId,
+                               String provider,
+                               String status,
+                               boolean subscriptionActive,
+                               int faceCredits) {
     }
 }

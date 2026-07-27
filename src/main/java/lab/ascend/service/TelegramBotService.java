@@ -24,7 +24,8 @@ public class TelegramBotService implements ApplicationRunner {
     private final AppProperties properties;
     private final ObjectMapper objectMapper;
     private final PaymentRepository payments;
-    private final SubscriptionService subscriptions;
+    private final PurchaseFulfillmentService fulfillment;
+    private final FaceAnalysisAccessService faceAccess;
     private final PlanCatalogService plans;
     private final RestClient restClient;
     private volatile boolean polling;
@@ -34,12 +35,14 @@ public class TelegramBotService implements ApplicationRunner {
     public TelegramBotService(AppProperties properties,
                               ObjectMapper objectMapper,
                               PaymentRepository payments,
-                              SubscriptionService subscriptions,
+                              PurchaseFulfillmentService fulfillment,
+                              FaceAnalysisAccessService faceAccess,
                               PlanCatalogService plans) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.payments = payments;
-        this.subscriptions = subscriptions;
+        this.fulfillment = fulfillment;
+        this.faceAccess = faceAccess;
         this.plans = plans;
         this.restClient = RestClient.create();
     }
@@ -62,7 +65,9 @@ public class TelegramBotService implements ApplicationRunner {
     public String createStarsInvoiceLink(long telegramId, PlanOffer plan, String paymentId) {
         Map<String, Object> body = Map.of(
                 "title", "BodyLab - " + plan.title(),
-                "description", "Доступ к BodyPro: анализ лица, BodyGPT, питание, академия и MogBattle.",
+                "description", faceAccess.isProduct(plan.code())
+                        ? "Персональная AI-оценка лица BodyLab."
+                        : "Доступ к BodyPro: анализ лица, BodyGPT, питание, академия и MogBattle.",
                 "payload", paymentId + ":" + telegramId + ":" + plan.code(),
                 "provider_token", "",
                 "currency", "XTR",
@@ -107,10 +112,11 @@ public class TelegramBotService implements ApplicationRunner {
         long telegramId = Long.parseLong(parts[1]);
         PlanOffer plan = plans.get(parts[2]);
         payments.markStatus(paymentId, PaymentStatus.PAID, payment.path("telegram_payment_charge_id").asText(null), payment.toString());
-        subscriptions.activate(telegramId, plan, "telegram_stars", paymentId);
-        log.info("Telegram Stars payment {} activated BodyPro for {}", paymentId, telegramId);
-        sendMessage(message.path("chat").path("id").asLong(),
-                "Оплата прошла. BodyPro активирован: анализ лица, BodyGPT, питание, персональный план и академия уже открыты.");
+        fulfillment.fulfill(telegramId, plan, "telegram_stars", paymentId);
+        log.info("Telegram Stars payment {} fulfilled {} for {}", paymentId, plan.code(), telegramId);
+        sendMessage(message.path("chat").path("id").asLong(), faceAccess.isProduct(plan.code())
+                ? "Оплата прошла. Оценка лица готова к запуску в BodyLab."
+                : "Оплата прошла. BodyPro активирован: анализ лица, BodyGPT, питание, персональный план и академия уже открыты.");
     }
 
     private void sendStart(long chatId) {

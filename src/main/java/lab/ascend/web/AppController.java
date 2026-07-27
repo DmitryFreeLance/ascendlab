@@ -7,6 +7,7 @@ import lab.ascend.repo.UserRepository;
 import lab.ascend.service.AdminService;
 import lab.ascend.service.ChatUsageService;
 import lab.ascend.service.CurrentUserService;
+import lab.ascend.service.FaceAnalysisAccessService;
 import lab.ascend.service.PaymentService;
 import lab.ascend.service.PlanCatalogService;
 import lab.ascend.service.SubscriptionService;
@@ -33,6 +34,7 @@ public class AppController {
     private final UserRepository users;
     private final AnalysisRepository analyses;
     private final AppProperties properties;
+    private final FaceAnalysisAccessService faceAccess;
 
     public AppController(CurrentUserService currentUser,
                          SubscriptionService subscriptions,
@@ -42,7 +44,8 @@ public class AppController {
                          ChatUsageService chatUsage,
                          UserRepository users,
                          AnalysisRepository analyses,
-                         AppProperties properties) {
+                         AppProperties properties,
+                         FaceAnalysisAccessService faceAccess) {
         this.currentUser = currentUser;
         this.subscriptions = subscriptions;
         this.payments = payments;
@@ -52,6 +55,7 @@ public class AppController {
         this.users = users;
         this.analyses = analyses;
         this.properties = properties;
+        this.faceAccess = faceAccess;
     }
 
     @GetMapping("/bootstrap")
@@ -64,6 +68,7 @@ public class AppController {
                 Map.entry("subscription", subscriptions.status(user.telegramId())),
                 Map.entry("chatUsage", chatUsage.status(user.telegramId())),
                 Map.entry("hasFaceAnalysis", analyses.existsByTelegramId(user.telegramId())),
+                Map.entry("faceAnalysis", faceAccess.status(user.telegramId())),
                 Map.entry("communityProgress", analyses.communityProgress()),
                 Map.entry("plans", plans.all()),
                 Map.entry("payments", payments.paymentConfig()),

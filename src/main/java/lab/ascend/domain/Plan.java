@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 
 public enum Plan {
-    INTRO("intro", "Ознакомительный", "1 анализ лица + знакомство с ботом", 1, 99, 49, new BigDecimal("1.20"), ""),
+    INTRO("intro", "Ознакомительный BodyPro", "1 день полного доступа ко всем функциям", 1, 99, 49, new BigDecimal("1.20"), ""),
     WEEK("week", "1 неделя", "7 дней полного доступа", 7, 499, 249, new BigDecimal("5.60"), ""),
     MONTH("month", "1 месяц", "30 дней полного доступа", 30, 999, 499, new BigDecimal("11.20"), "Выгода -50%"),
     QUARTER("quarter", "3 месяца", "90 дней полного доступа", 90, 1999, 999, new BigDecimal("22.20"), "Хит");

@@ -18,6 +18,7 @@ const BODY_ANALYSIS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 let planClockTimer = null;
 let chatScrollFrame = null;
 let countdownTimer = null;
+let activeChatTyper = null;
 
 function apiPath(path) {
     return `${APP_BASE_PATH}${path}`;
@@ -25,11 +26,12 @@ function apiPath(path) {
 
 const state = {
     view: "dashboard",
+    viewHistory: [],
     boot: null,
     selectedPlan: "intro",
     onboardingStep: 0,
-    files: { front: null, side: null, body: null },
-    previews: { front: null, side: null, body: null },
+    files: { front: null, side: null, body: null, meal: null },
+    previews: { front: null, side: null, body: null, meal: null },
     analysis: null,
     nutrition: null,
     nutritionHistory: null,
@@ -43,7 +45,9 @@ const state = {
     selectedPlanDay: null,
     selectedGuide: null,
     selectedGuideCategory: "",
+    selectedMetric: "",
     guideTrack: "soft",
+    paymentMode: "subscription",
     analysisStep: 1,
     planTools: [],
     water: { enabled: false, amountMl: 0, targetMl: 2500, dayKey: "" },
@@ -93,9 +97,9 @@ const planPhases = [
 ];
 
 const battleOpponents = [
-    { id: "neo", name: "Артём", tier: "сильная внешность", score: 86, image: "assets/battle/fake-neo.jpg" },
-    { id: "soft", name: "Никита", tier: "ровный образ", score: 63, image: "assets/battle/fake-soft.jpg" },
-    { id: "raw", name: "Илья", tier: "слабый ракурс", score: 49, image: "assets/battle/fake-raw.jpg" }
+    { id: "neo", name: "Артём", tier: "контрольный профиль", image: "assets/battle/fake-neo.jpg" },
+    { id: "soft", name: "Никита", tier: "контрольный профиль", image: "assets/battle/fake-soft.jpg" },
+    { id: "raw", name: "Илья", tier: "контрольный профиль", image: "assets/battle/fake-raw.jpg" }
 ];
 
 const nav = [
@@ -225,7 +229,7 @@ const guideSeeds = {
     style: ["Силуэт", "Цвета у лица", "Капсула на 30 дней"],
     posture: ["Шея вперёд", "Плечи", "Лопатки", "Таз и поясница", "Походка", "Фото осанки", "Ежедневный комплекс"],
     photo: ["Свет", "Ракурс", "Выражение", "Аватарка", "Фото для знакомств", "Разбор серии"],
-    jaw: ["Жевательные мышцы: трезвый подход"],
+    jaw: ["Мьюнинг: трезвый подход"],
     ortho: ["Брекеты и элайнеры", "Консультация ортодонта"],
     bite: ["Прикус и профиль", "Когда идти к специалисту"],
     operations: ["Ринопластика", "Блефаропластика", "Подбородок", "Скулы", "Липосакция лица", "Риски операций", "Как готовить вопросы врачу"],
@@ -788,6 +792,15 @@ async function bootstrap() {
     renderLoading();
     try {
         state.boot = await api("/api/bootstrap", { method: "GET", headers: { "Content-Type": "application/json" } });
+        const returnedPaymentId = new URLSearchParams(window.location.search).get("payment");
+        if (returnedPaymentId) {
+            try {
+                await api(`/api/payments/${returnedPaymentId}/status`, { method: "GET" });
+                state.boot = await api("/api/bootstrap", { method: "GET" });
+            } catch (_) {
+                // The webhook may still be processing; the normal payment screen remains available.
+            }
+        }
         state.settings = {
             gender: state.boot.user.gender || "male",
             age: state.boot.user.age || 25,
@@ -808,7 +821,11 @@ async function bootstrap() {
         render();
         startPlanClock();
         startCountdownClock();
-        if (returnPlan) openAccessModal(returnPlan);
+        if (returnPlan?.face) {
+            toast("Оплата принята. Оценка лица готова к запуску.");
+        } else if (returnPlan) {
+            openAccessModal(returnPlan);
+        }
     } catch (error) {
         document.querySelector("#app").innerHTML = `<section class="section-panel"><h2>Не удалось запустить BodyLab</h2><p class="muted">${escapeHtml(error.message)}</p></section>`;
     }
@@ -845,6 +862,7 @@ function render() {
     }[state.view] || renderDashboard;
     app.innerHTML = `<div class="view ${state.view === "onboarding" ? "onboarding-view" : ""}">${view()}</div>`;
     bindView();
+    syncTopbarNavigation();
     refreshIcons();
 }
 
@@ -904,6 +922,17 @@ function renderDashboard() {
     </section>` : ""}
     ${renderCommunityProgress()}
     ${active ? "" : `<section class="section-panel">
+        <p class="eyebrow">Отдельная оценка</p>
+        <div class="standalone-face-offer">
+            <span class="icon-shell"><i data-lucide="scan-face"></i></span>
+            <div>
+                <h2>${escapeHtml(faceAnalysisOffer()?.title || "Оценка лица")}</h2>
+                <p class="muted">Итоговый честный балл без детальной карты метрик и остальных функций BodyPro.</p>
+            </div>
+            <strong>${faceAnalysisOffer()?.rub || 49} ₽</strong>
+            <button class="button secondary" data-action="${Number(state.boot.faceAnalysis?.credits || 0) > 0 ? "go-face-analysis" : "open-face-payment"}">${Number(state.boot.faceAnalysis?.credits || 0) > 0 ? "Запустить" : "Выбрать"}</button>
+        </div>
+        <div class="offer-divider"><span>или полный доступ</span></div>
         <p class="eyebrow">Выбери тариф</p>
         <h2>Полный доступ ко всем функциям</h2>
         <div class="plan-list">${state.boot.plans.map(planCard).join("")}</div>
@@ -1009,24 +1038,27 @@ function renderFeatures() {
 function renderAnalysis() {
     const result = state.analysis;
     if (state.busy.analysis) return renderFaceAnalysisProgress();
-    if (!isPro() && hasUsedFreeFaceAnalysis()) return renderFaceAnalysisLocked(result);
+    if (state.selectedMetric && isPro() && result) return renderAnalysisMetricDetail(result, state.selectedMetric);
     if (!result) return renderFaceAnalysisWizard();
     const remaining = analysisCooldownRemaining("face");
     const canRun = canRunFaceAnalysis();
-    const blockedByAccess = !isPro() && hasUsedFreeFaceAnalysis();
+    const blockedByAccess = !hasFaceAnalysisEntitlement();
+    const offer = faceAnalysisOffer();
     const buttonBusy = state.busy.analysis;
-    const buttonLabel = blockedByAccess ? "Открыть BodyPro" : remaining > 0 ? `Обновление через ${formatDuration(remaining)}` : "Оценить лицо";
+    const buttonLabel = blockedByAccess
+        ? `Новая оценка · ${offer?.rub || 99} ₽`
+        : remaining > 0 && isPro() ? `Обновление через ${formatDuration(remaining)}` : "Оценить лицо";
     const buttonBusyLabel = "Сканирую...";
     return `<section class="section-panel">
         <p class="eyebrow">Анализ лица</p>
         <h1>Скан внешности</h1>
         <p class="muted">Загрузи фронтальное фото и, по желанию, боковой ракурс. BodyLab соберёт эстетический профиль, зоны роста и первые действия.</p>
-        ${result && !blockedByAccess ? cooldownNotice("face") : ""}
+        ${result && isPro() ? cooldownNotice("face") : ""}
         <div class="upload-grid">
             ${uploadTile("front", "Анфас", "хорошее освещение")}
             ${uploadTile("side", "Профиль", "по желанию")}
         </div>
-        <button class="button primary ${buttonBusy ? "processing" : ""}" data-action="${blockedByAccess ? "open-payment" : "run-analysis"}" ${buttonBusy || (!blockedByAccess && !canRun) ? "disabled" : ""}>${buttonBusy ? buttonContent("Оценить лицо", buttonBusyLabel, "scan-line", true) : `<i data-lucide="${blockedByAccess ? "unlock" : "scan-line"}"></i><span ${!blockedByAccess && remaining > 0 ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>`}</button>
+        <button class="button primary ${buttonBusy ? "processing" : ""}" data-action="${blockedByAccess ? "open-face-payment" : "run-analysis"}" ${buttonBusy || (!blockedByAccess && !canRun) ? "disabled" : ""}>${buttonBusy ? buttonContent("Оценить лицо", buttonBusyLabel, "scan-line", true) : `<i data-lucide="${blockedByAccess ? "scan-face" : "scan-line"}"></i><span ${!blockedByAccess && remaining > 0 && isPro() ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>`}</button>
     </section>
     ${result ? renderAnalysisResult(result) : ""}
     <section class="section-panel">
@@ -1084,6 +1116,8 @@ function renderFaceAnalysisStepSide() {
 
 function renderFaceAnalysisStepReview() {
     const hasSide = Boolean(state.files.side || state.previews.side);
+    const entitled = hasFaceAnalysisEntitlement();
+    const offer = faceAnalysisOffer();
     return renderFaceStepShell(3, "Запуск", "Проверь фото и запусти анализ.", `
         <div class="face-review-grid">
             ${faceReviewPhoto("front", "Анфас")}
@@ -1092,10 +1126,10 @@ function renderFaceAnalysisStepReview() {
         <div class="review-lines">
             <div><span>Пол</span><strong>${state.settings.gender === "female" ? "Женщина" : "Мужчина"}</strong></div>
             <div><span>Фото</span><strong>${hasSide ? "Анфас и профиль" : "Только анфас"}</strong></div>
-            <div><span>Режим</span><strong>${isPro() ? "Полный анализ" : "Первый скан"}</strong></div>
+            <div><span>Режим</span><strong>${isPro() ? "Полная карта метрик" : "Оценка лица"}</strong></div>
         </div>
-        <p class="muted">Проверь фото и запусти анализ.</p>
-        <button class="button primary" data-action="run-analysis">Начать анализ</button>
+        <p class="muted">${isPro() ? "BodyPro откроет все метрики и действия по каждой зоне." : "В отдельную оценку входит итоговый балл. Детальная карта метрик доступна в BodyPro."}</p>
+        <button class="button primary" data-action="${entitled ? "run-analysis" : "open-face-payment"}">${entitled ? "Начать анализ" : `Оплатить оценку · ${offer?.rub || 49} ₽`}</button>
         <button class="button secondary" data-action="analysis-back"><i data-lucide="arrow-left"></i>Назад</button>
     `);
 }
@@ -1132,9 +1166,10 @@ function renderFaceAnalysisLocked(result) {
 }
 
 function renderAnalysisResult(result) {
-    const metrics = (result.metrics || []).filter(item => !isStyleMetric(item?.name));
-    const zones = (result.zones || []).filter(item => !isStyleMetric(item?.name));
-    const routine = Array.isArray(result.routine) ? result.routine.filter(Boolean).slice(0, 5) : [];
+    const fullAccess = isPro() && !result.metricsLocked;
+    const metrics = fullAccess ? (result.metrics || []).filter(item => !isStyleMetric(item?.name)) : [];
+    const zones = fullAccess ? (result.zones || []).filter(item => !isStyleMetric(item?.name)) : [];
+    const routine = fullAccess && Array.isArray(result.routine) ? result.routine.filter(Boolean).slice(0, 5) : [];
     const score = Math.max(0, Math.min(100, Number(result.score) || 0));
     const comparison = result.comparison || scanComparison(state.analysisHistory[1], result, "face");
     return `<section class="section-panel analysis-result">
@@ -1149,8 +1184,15 @@ function renderAnalysisResult(result) {
             </div>
         </div>
         <div class="analysis-metrics">
-            ${metrics.map(analysisMetric).join("")}
+            ${metrics.map(item => analysisMetric(item, true)).join("")}
         </div>
+        ${!fullAccess ? `<article class="metrics-lock-card">
+            <span class="icon-shell"><i data-lucide="scan-face"></i></span>
+            <p class="eyebrow">${result.metricCount || result.metrics?.length || 10} метрик рассчитано</p>
+            <h2>Открой полную карту лица</h2>
+            <p class="muted">${escapeHtml(result.upgradeText || "BodyPro покажет зоны глаз, челюсть, кожу, костную структуру, пропорции и персональные действия.")}</p>
+            <button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Открыть BodyPro</button>
+        </article>` : ""}
         ${renderScanComparison(comparison)}
         ${zones.length ? `<div class="analysis-zone-grid">${zones.map(analysisZone).join("")}</div>` : ""}
         ${routine.length ? `<div class="analysis-next-grid">
@@ -1164,21 +1206,39 @@ function renderAnalysisResult(result) {
             ${isPro()
                 ? `<button class="button primary" data-view="plan"><i data-lucide="route"></i>Начать день ${currentPlanDay()}</button>`
                 : `<button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Открыть BodyPro</button>`}
-            <button class="button secondary" data-action="ask-gpt" data-prompt="Составь мне первый день после анализа лица"><i data-lucide="brain"></i>Спросить BodyGPT</button>
+            ${isPro() ? `<button class="button secondary" data-action="ask-gpt" data-prompt="Составь мне первый день после анализа лица"><i data-lucide="brain"></i>Спросить BodyGPT</button>` : ""}
         </div>
     </section>`;
 }
 
-function analysisMetric(item) {
+function analysisMetric(item, interactive = false) {
     const value = Math.max(0, Math.min(100, Number(item.value) || 0));
-    return `<article class="analysis-metric-card">
+    return `<article class="analysis-metric-card ${interactive ? "interactive" : ""}" ${interactive ? `data-analysis-metric="${escapeHtml(item.id || item.name)}" role="button" tabindex="0"` : ""}>
         <div class="analysis-metric-head">
             <strong>${escapeHtml(item.name)}</strong>
-            <span>${value}%</span>
+            <span>${value}%${interactive ? ` <i data-lucide="chevron-right"></i>` : ""}</span>
         </div>
         <div class="track live-track"><span class="fill" style="--value:${value};width:${value}%"></span></div>
         <p class="muted">${escapeHtml(cleanPublicText(item.hint || ""))}</p>
     </article>`;
+}
+
+function renderAnalysisMetricDetail(result, metricId) {
+    const metric = (result.metrics || []).find(item => String(item.id || item.name) === String(metricId));
+    if (!metric) {
+        state.selectedMetric = "";
+        return renderAnalysis();
+    }
+    const actions = Array.isArray(metric.actions) ? metric.actions.filter(Boolean).slice(0, 5) : [];
+    return `<section class="section-panel metric-detail">
+        <button class="button quiet guide-back" data-action="back-analysis-metrics"><i data-lucide="chevron-left"></i>Все метрики</button>
+        <p class="eyebrow">Карта лица</p>
+        <div class="metric-detail-score"><strong>${Math.max(0, Math.min(100, Number(metric.value) || 0))}</strong><span>/100</span></div>
+        <h1>${escapeHtml(metric.name || "Метрика")}</h1>
+        <p class="muted">${escapeHtml(cleanPublicText(metric.details || metric.hint || ""))}</p>
+        ${actions.length ? `<div class="analysis-plan-card"><p class="eyebrow">Что делать</p><ol class="routine-list">${actions.map(action => `<li>${escapeHtml(action)}</li>`).join("")}</ol></div>` : ""}
+        <button class="button primary" data-action="ask-gpt" data-prompt="${escapeHtml(`Разбери мою метрику «${metric.name}» (${metric.value}/100): ${metric.details || metric.hint || ""}. Что конкретно делать?`)}"><i data-lucide="brain"></i>Проконсультироваться с BodyGPT</button>
+    </section>`;
 }
 
 function analysisZone(zone) {
@@ -1198,7 +1258,8 @@ function renderBodyMax() {
         ...baseAssessment,
         score: state.bodyAnalysis.score,
         title: state.bodyAnalysis.title,
-        summary: baseAssessment.summary,
+        summary: state.bodyAnalysis.summary || baseAssessment.summary,
+        metrics: state.bodyAnalysis.metrics || baseAssessment.metrics,
         comparison: state.bodyAnalysis.comparison,
         createdAt: state.bodyAnalysis.createdAt
     } : null;
@@ -1209,7 +1270,7 @@ function renderBodyMax() {
         <p class="muted">Загрузи фото формы, выбери цель и получи план по питанию, тренировкам и контрольным замерам.</p>
         ${assessment ? cooldownNotice("body") : ""}
         <div class="upload-grid">
-            ${uploadTile("body", "Фото тела", "прямо, без сильного ракурса")}
+            ${uploadTile("body", "Фото тела", "контуры видны · без верхней одежды")}
             ${assessment ? `<div class="body-score-card">
                 <div class="score-orbit" style="--score:${assessment.score}">
                     <div class="score-center"><strong>${assessment.score}</strong><span>/100</span></div>
@@ -1251,6 +1312,7 @@ function renderBodyResult(assessment) {
     return `<section class="section-panel body-result">
         <p class="eyebrow">План под цель</p>
         <h2>${assessment.planTitle}</h2>
+        <div class="analysis-metrics">${(assessment.metrics || []).map(item => analysisMetric(item)).join("")}</div>
         ${renderScanComparison(assessment.comparison)}
         <div class="grid three body-kpis">
             <div class="stat-card"><small>Калории</small><strong>${assessment.calories}</strong><em>ккал/день</em></div>
@@ -1492,6 +1554,7 @@ function renderNutrition() {
                 return `<button data-value="${value}" class="${state.mealType === value ? "active" : ""}">${label}</button>`;
             }).join("")}</div>
             <input class="meal-input" id="mealInput" placeholder="Напр.: 2 яйца, тост с авокадо">
+            <div class="meal-photo-upload">${uploadTile("meal", "Фото тарелки", "сверху · вся еда в кадре")}</div>
             ${isPro() ? "" : `<div class="coach-card locked"><i data-lucide="lock"></i><div><strong>AI-оценка с BodyPro</strong><p class="muted">Дневник открыт, а автоматический разбор еды подключается с подпиской.</p></div></div>`}
             <button class="button primary ${state.busy.meal ? "processing" : ""}" data-action="add-meal" ${state.busy.meal ? "disabled" : ""}>${buttonContent(isPro() ? "Оценить и добавить" : "Оценить с BodyPro", "Считаю КБЖУ...", "wand-sparkles", state.busy.meal)}</button>
             ${state.busy.meal ? `<div class="coach-card"><span class="mini-loader"></span><div><strong>Разбираю приём пищи</strong><p class="muted">Считаю калории и БЖУ, затем добавлю запись в дневник.</p></div></div>` : ""}
@@ -1550,13 +1613,16 @@ function renderGuideCategory(categoryId) {
                 <p class="muted">Всего гайдов: ${guides.length}</p>
             </div>
         </div>
-        <div class="guide-list-grid">${guides.map(guide => `<article class="guide-list-card ${category.track === "hard" ? "hard" : ""}">
+        <div class="guide-list-grid">${guides.map(guide => {
+            const accessible = canOpenGuide(guide);
+            return `<article class="guide-list-card ${category.track === "hard" ? "hard" : ""} ${accessible ? "" : "locked"}">
             <span class="badge">${guide.tag}</span>
             <h3>${guide.title}</h3>
             <p class="muted">${guide.intro}</p>
             <div class="guide-preview"><i data-lucide="check"></i><span>${escapeHtml(guide.sections[1]?.items?.[0] || guide.sections[0]?.items?.[0] || "")}</span></div>
-            <div class="guide-card-foot"><span><i data-lucide="heart"></i> ${guide.likes}</span><button class="button secondary" data-guide="${guide.id}">Открыть</button></div>
-        </article>`).join("")}</div>
+            <div class="guide-card-foot"><span><i data-lucide="heart"></i> ${guide.likes}</span><button class="button secondary" data-guide="${guide.id}">${accessible ? "Открыть" : `<i data-lucide="lock"></i>BodyPro`}</button></div>
+        </article>`;
+        }).join("")}</div>
     </section>`;
 }
 
@@ -1636,6 +1702,13 @@ function makeGuide(category, title, index) {
 
 function guidesForCategory(categoryId) {
     return guideLibrary.filter(guide => guide.categoryId === categoryId);
+}
+
+function canOpenGuide(guide) {
+    if (isPro()) return true;
+    if (!guide || guide.categoryTrack === "hard") return false;
+    const firstThree = guideLibrary.filter(item => item.categoryTrack === "soft").slice(0, 3);
+    return firstThree.some(item => item.id === guide.id);
 }
 
 function guideSectionsFor(category, title, knowledge) {
@@ -1746,28 +1819,33 @@ function renderBattle() {
     return `<section class="section-panel battle-arena">
         <p class="eyebrow">MogBattle</p>
         <h1>MogBattle</h1>
-        <p class="muted">Соперник выпадает случайно. Баттл сравнивает общий визуальный уровень: лицо, кожу, контур, стиль, форму и качество фото.</p>
+        <p class="muted">Выбери контрольный профиль. AI сравнит оба фото одновременно по одной шкале — без случайной прибавки к баллам и случайного победителя.</p>
         <div class="battle-stats">
             <div class="battle-stat"><small>ELO</small><strong>${elo}</strong></div>
             <div class="battle-stat"><small>Ранг</small><strong>${battleRank(elo)}</strong></div>
             <div class="battle-stat"><small>Winrate</small><strong>${winrate}%</strong></div>
         </div>
+        <div class="opponent-strip" aria-label="Выбор контрольного профиля">
+            ${battleOpponents.map(item => `<button class="opponent-chip ${item.id === opponent.id ? "active" : ""}" data-battle-opponent="${item.id}" aria-pressed="${item.id === opponent.id}">
+                <img src="${item.image}" alt="">
+                <strong>${item.name}</strong>
+                <small>${item.tier}</small>
+            </button>`).join("")}
+        </div>
         <div class="battle-stage">
             <div class="fighter-card">
                 <div class="fighter-photo ${ownPreview ? "has-photo" : ""}">${ownPreview ? `<img src="${ownPreview}" alt="">` : `<span class="brand-mark">B</span>`}</div>
                 <strong>Ты</strong>
-                <small>${ownScore ? `${ownScore}/100` : "нужен анализ или фото"}</small>
+                <small>${ownScore ? `${ownScore}/100` : ownPreview ? "готов к AI-сравнению" : "сначала добавь фото"}</small>
             </div>
             <div class="versus-core">VS</div>
             <div class="fighter-card">
-                ${state.battleResult ? `<div class="fighter-photo has-photo"><img src="${opponent.image}" alt=""></div>
+                <div class="fighter-photo has-photo"><img src="${opponent.image}" alt=""></div>
                 <strong>${opponent.name}</strong>
-                <small>${opponent.tier} · ${opponent.score}/100</small>` : `<div class="fighter-photo mystery"><span class="brand-mark">?</span></div>
-                <strong>Случайный соперник</strong>
-                <small>откроется после запуска</small>`}
+                <small>${state.battleResult ? `${state.battleResult.opponentScore}/100` : "оценится вместе с тобой"}</small>
             </div>
         </div>
-        <button class="button primary ${state.busy.battle ? "processing" : ""}" data-action="run-battle" ${state.busy.battle ? "disabled" : ""}>${buttonContent("Запустить баттл", "Сравниваю...", "swords", state.busy.battle)}</button>
+        <button class="button primary ${state.busy.battle ? "processing" : ""}" data-action="run-battle" ${state.busy.battle || !ownPreview ? "disabled" : ""}>${buttonContent(ownPreview ? "Сравнить два фото" : "Сначала добавь фото лица", "AI сравнивает фото...", "swords", state.busy.battle)}</button>
         ${state.battleResult ? renderBattleResult() : ""}
         <div class="battle-history-board">
             <p class="eyebrow">История боёв</p>
@@ -1786,6 +1864,7 @@ function renderBattleResult() {
             <span><b>${escapeHtml(result.name)}</b><i style="width:${result.opponentScore}%"></i></span>
         </div>
         <p class="muted">${escapeHtml(result.advice)}</p>
+        ${result.focus?.length ? `<div class="battle-focus">${result.focus.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
     </div>`;
 }
 
@@ -2133,7 +2212,7 @@ function planCard(plan) {
 }
 
 function paymentPlanCard(plan) {
-    const selected = state.selectedPlan === plan.code;
+    const selected = state.paymentMode === "face" || state.selectedPlan === plan.code;
     return `<button class="plan-card payment-plan-card ${selected ? "selected" : ""}" data-payment-plan="${plan.code}" ${state.busy.payment ? "disabled" : ""}>
         <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge ? `<span class="badge">${plan.badge}</span>` : ""}</span>
         <span class="price">${plan.rub} ₽</span>
@@ -2189,7 +2268,12 @@ function bindView() {
     }));
     document.querySelectorAll("[data-chat-chip]").forEach(button => button.addEventListener("click", () => sendChat(button.dataset.chatChip)));
     document.querySelectorAll("[data-guide]").forEach(button => button.addEventListener("click", () => {
-        state.selectedGuide = button.dataset.guide;
+        const guide = guideLibrary.find(item => item.id === button.dataset.guide);
+        if (!canOpenGuide(guide)) {
+            openPayment();
+            return;
+        }
+        state.selectedGuide = guide.id;
         render();
         resetScroll();
     }));
@@ -2205,6 +2289,20 @@ function bindView() {
         state.selectedGuide = null;
         render();
     }));
+    document.querySelectorAll("[data-analysis-metric]").forEach(card => {
+        const open = () => {
+            state.selectedMetric = card.dataset.analysisMetric;
+            render();
+            resetScroll();
+        };
+        card.addEventListener("click", open);
+        card.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                open();
+            }
+        });
+    });
     document.querySelectorAll("[data-goal]").forEach(button => button.addEventListener("click", () => {
         const profile = bodyProfileFromInputs();
         profile.goal = button.dataset.goal;
@@ -2284,6 +2382,17 @@ async function handleAction(event) {
     }
     if (action === "open-payment") {
         openPayment();
+    }
+    if (action === "open-face-payment") {
+        openFacePayment();
+    }
+    if (action === "go-face-analysis") {
+        setView("analysis");
+    }
+    if (action === "back-analysis-metrics") {
+        state.selectedMetric = "";
+        render();
+        resetScroll();
     }
     if (action === "analysis-next") {
         state.analysisStep = Math.min(3, Math.max(1, Number(state.analysisStep) || 1) + 1);
@@ -2372,18 +2481,84 @@ function finishOnboarding() {
     localStorage.setItem(ONBOARDING_KEY, "1");
     if (state.boot) state.boot.onboardingSeen = true;
     completeOnboardingRemote();
-    setView("dashboard");
+    setView("dashboard", { replace: true });
     resetScroll();
 }
 
-function setView(view) {
+function setView(view, options = {}) {
+    if (state.view === "gpt" && view !== "gpt") {
+        activeChatTyper?.flush();
+    }
+    if (!options.replace && state.view !== view && state.view !== "onboarding") {
+        state.viewHistory.push({ view: state.view });
+        state.viewHistory = state.viewHistory.slice(-20);
+    }
     state.view = view;
+    if (view !== "analysis") state.selectedMetric = "";
+    if (view !== "academy") {
+        state.selectedGuide = null;
+        state.selectedGuideCategory = "";
+    }
     closeDrawer();
     renderNav();
     render();
     resetScroll();
     if (view === "nutrition") loadNutrition();
     if (view === "admin") loadAdmin();
+}
+
+function navigateBack() {
+    if (state.view === "gpt") {
+        activeChatTyper?.flush();
+    }
+    if (state.view === "analysis" && state.selectedMetric) {
+        state.selectedMetric = "";
+        render();
+        resetScroll();
+        return;
+    }
+    if (state.view === "academy" && state.selectedGuide) {
+        state.selectedGuide = null;
+        render();
+        resetScroll();
+        return;
+    }
+    if (state.view === "academy" && state.selectedGuideCategory) {
+        state.selectedGuideCategory = "";
+        render();
+        resetScroll();
+        return;
+    }
+    if (state.view === "analysis" && state.analysisStep > 1 && state.analysisStep < 4 && !state.analysis) {
+        state.analysisStep -= 1;
+        render();
+        resetScroll();
+        return;
+    }
+    const previous = state.viewHistory.pop();
+    state.view = previous?.view || "dashboard";
+    closeDrawer();
+    renderNav();
+    render();
+    resetScroll();
+    if (state.view === "nutrition") loadNutrition();
+    if (state.view === "admin") loadAdmin();
+}
+
+function goDashboard() {
+    state.viewHistory = [];
+    state.selectedGuide = null;
+    state.selectedGuideCategory = "";
+    setView("dashboard", { replace: true });
+}
+
+function syncTopbarNavigation() {
+    const button = document.querySelector("#menuButton");
+    if (!button) return;
+    const isHome = state.view === "dashboard" || state.view === "onboarding";
+    button.classList.toggle("back-button", !isHome);
+    button.setAttribute("aria-label", isHome ? "Открыть меню" : "Назад");
+    button.innerHTML = `<i data-lucide="${isHome ? "menu" : "arrow-left"}"></i>`;
 }
 
 function resetScroll() {
@@ -2413,8 +2588,8 @@ function renderNav() {
 async function runAnalysis() {
     if (state.busy.analysis) return;
     if (!canRunFaceAnalysis()) {
-        if (!isPro() && hasUsedFreeFaceAnalysis()) {
-            openPayment();
+        if (!hasFaceAnalysisEntitlement()) {
+            openFacePayment();
         } else {
             toast("Следующий скан откроется позже.");
         }
@@ -2444,6 +2619,10 @@ async function runAnalysis() {
         data.comparison = scanComparison(previous, data, "face");
         state.analysis = data;
         if (state.boot) state.boot.hasFaceAnalysis = true;
+        if (!isPro() && state.boot?.faceAnalysis) {
+            state.boot.faceAnalysis.credits = Math.max(0, Number(state.boot.faceAnalysis.credits || 0) - 1);
+            state.boot.faceAnalysis.introAvailable = false;
+        }
         state.analysisStep = 4;
         state.analysisHistory = [compactScan(data), ...state.analysisHistory].slice(0, 8);
         ensurePlanStartKey();
@@ -2487,9 +2666,32 @@ async function runBodyAnalysis() {
         const previous = state.bodyAnalysis || state.bodyHistory[0] || null;
         state.busy.body = true;
         render();
-        toast("Оцениваю форму...");
-        await delay(820);
-        const assessment = bodyAssessment(state.bodyProfile);
+        toast("Проверяю фото и оцениваю форму...");
+        const form = new FormData();
+        appendImageToForm(form, "photo", state.files.body, state.previews.body);
+        form.append("height", String(state.bodyProfile.height));
+        form.append("weight", String(state.bodyProfile.weight));
+        form.append("waist", String(state.bodyProfile.waist));
+        form.append("goal", state.bodyProfile.goal);
+        const response = await fetch(apiPath("/api/analysis/body"), {
+            method: "POST",
+            headers: { "X-Telegram-Init-Data": tg?.initData || "" },
+            body: form
+        });
+        const aiAssessment = await response.json();
+        if (!response.ok) throw new Error(aiAssessment.message || "Не удалось оценить фото формы");
+        const base = bodyAssessment(state.bodyProfile);
+        const assessment = {
+            ...base,
+            ...aiAssessment,
+            planTitle: base.planTitle,
+            calories: base.calories,
+            protein: base.protein,
+            pace: base.pace,
+            trainingTitle: base.trainingTitle,
+            trainingDays: base.trainingDays,
+            tracking: base.tracking
+        };
         const result = {
             ...assessment,
             profile: state.bodyProfile,
@@ -2526,26 +2728,16 @@ async function runToolAnalysis(id) {
         state.busy.tool = id;
         render();
         toast("Анализирую фото...");
-        let report = null;
-        if (state.files[kind] || state.previews[kind]) {
-            try {
-                const form = new FormData();
-                appendImageToForm(form, "photo", state.files[kind], state.previews[kind]);
-                const response = await fetch(apiPath(`/api/analysis/tools/${id}`), {
-                    method: "POST",
-                    headers: { "X-Telegram-Init-Data": tg?.initData || "" },
-                    body: form
-                });
-                const data = await response.json();
-                if (response.ok) report = normalizeToolReport(id, tool, data);
-            } catch (_) {
-                report = null;
-            }
-        }
-        if (!report) {
-            await delay(780);
-            report = toolAssessment(id, tool, previous);
-        }
+        const form = new FormData();
+        appendImageToForm(form, "photo", state.files[kind], state.previews[kind]);
+        const response = await fetch(apiPath(`/api/analysis/tools/${id}`), {
+            method: "POST",
+            headers: { "X-Telegram-Init-Data": tg?.initData || "" },
+            body: form
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Не удалось провести анализ фото");
+        const report = normalizeToolReport(id, tool, data);
         report.comparison = scanComparison(previous, report, "tool");
         report.createdAt = new Date().toISOString();
         state.toolReports[id] = report;
@@ -2580,6 +2772,7 @@ async function sendChat(text) {
     render();
     scrollChatToBottom(true);
     const typer = createTypingRenderer(assistant);
+    activeChatTyper = typer;
     try {
         const response = await fetch(apiPath("/api/chat/stream"), {
             method: "POST",
@@ -2606,18 +2799,18 @@ async function sendChat(text) {
         assistant.pending = false;
         assistant.text = error.message;
         saveChatHistory();
-        paintChatMessage(assistant);
-        scrollChatToBottom(true);
+        if (state.view === "gpt") {
+            paintChatMessage(assistant);
+            scrollChatToBottom(true);
+        }
     } finally {
+        activeChatTyper = null;
         assistant.pending = false;
         state.busy.chat = false;
         saveChatHistory();
         if (state.view === "gpt" && paintChatMessage(assistant)) {
             unlockChatComposer();
             paintChatQuota();
-            scrollChatToBottom(true);
-        } else {
-            render();
             scrollChatToBottom(true);
         }
     }
@@ -2669,9 +2862,10 @@ async function addMeal() {
         return;
     }
     const input = document.querySelector("#mealInput");
-    const text = input?.value?.trim();
-    if (!text) {
-        toast("Опиши приём пищи.");
+    const text = input?.value?.trim() || "";
+    const hasPhoto = Boolean(state.files.meal || state.previews.meal);
+    if (!text && !hasPhoto) {
+        toast("Опиши приём пищи или загрузи фото тарелки.");
         return;
     }
     blurActiveInput();
@@ -2679,15 +2873,30 @@ async function addMeal() {
         state.busy.meal = true;
         render();
         toast("Считаю КБЖУ...");
-        const [nutrition] = await Promise.all([
-            api("/api/nutrition", {
+        let nutrition;
+        if (hasPhoto) {
+            const form = new FormData();
+            appendImageToForm(form, "photo", state.files.meal, state.previews.meal);
+            form.append("mealType", state.mealType);
+            form.append("text", text);
+            const response = await fetch(apiPath("/api/nutrition/photo"), {
+                method: "POST",
+                headers: { "X-Telegram-Init-Data": tg?.initData || "" },
+                body: form
+            });
+            nutrition = await response.json();
+            if (!response.ok) throw new Error(nutrition.message || "Не удалось распознать еду");
+        } else {
+            nutrition = await api("/api/nutrition", {
                 method: "POST",
                 body: JSON.stringify({ mealType: state.mealType, text })
-            }),
-            delay(420)
-        ]);
+            });
+        }
         state.nutrition = nutrition;
         state.nutritionHistory = null;
+        state.files.meal = null;
+        state.previews.meal = null;
+        localStorage.removeItem(storageKey("preview-meal"));
         render();
         toast("Добавлено в дневник.");
     } catch (error) {
@@ -2794,6 +3003,7 @@ async function copyAdminSnapshot() {
 }
 
 function openPayment() {
+    state.paymentMode = "subscription";
     if (!state.boot.plans.some(plan => plan.code === state.selectedPlan)) {
         state.selectedPlan = preferredPlanCode();
     }
@@ -2801,14 +3011,24 @@ function openPayment() {
     openModal("paymentModal");
 }
 
+function openFacePayment() {
+    state.paymentMode = "face";
+    updatePaymentModal();
+    openModal("paymentModal");
+}
+
 function updatePaymentModal() {
-    const plan = selectedPlan();
+    const plan = currentPaymentOffer();
     const config = state.boot.payments;
     document.querySelector("#paymentTitle").textContent = plan.title;
     document.querySelector("#paymentSubtitle").textContent = state.busy.payment
         ? "Ожидаю подтверждение оплаты..."
-        : "Выбери тариф и удобный способ оплаты.";
-    document.querySelector("#paymentPlanSummary").innerHTML = `<div class="plan-list payment-plan-list">${state.boot.plans.map(paymentPlanCard).join("")}</div>`;
+        : state.paymentMode === "face"
+            ? "Разовая оценка: итоговый балл без полной карты метрик."
+            : "Выбери тариф и удобный способ оплаты.";
+    document.querySelector("#paymentPlanSummary").innerHTML = state.paymentMode === "face"
+        ? `<div class="plan-list payment-plan-list">${paymentPlanCard(plan)}</div>`
+        : `<div class="plan-list payment-plan-list">${state.boot.plans.map(paymentPlanCard).join("")}</div>`;
     setProviderSubtitle("stars", `${plan.stars} Stars · внутри Telegram`);
     setProviderSubtitle("crypto", `${formatUsd(plan.usd)} USDT · счёт в Crypto Bot`);
     setProviderSubtitle("card", `${plan.rub} ₽ · СБП/Карта/Юмани`);
@@ -2827,7 +3047,8 @@ function setProviderSubtitle(provider, text) {
 async function pay(provider) {
     if (state.busy.payment) return;
     const endpoint = { stars: "stars", crypto: "crypto", card: "card" }[provider];
-    const plan = selectedPlan();
+    const plan = currentPaymentOffer();
+    const purchaseMode = state.paymentMode;
     try {
         setPaymentBusy(true);
         toast("Готовлю оплату...");
@@ -2838,7 +3059,7 @@ async function pay(provider) {
         if (link.action === "open_invoice" && tg?.openInvoice) {
             tg.openInvoice(link.url, status => {
                 if (status === "paid") {
-                    waitForPaymentActivation(link.paymentId, plan, true);
+                    waitForPaymentActivation(link.paymentId, plan, purchaseMode, true);
                 } else {
                     setPaymentBusy(false);
                     toast("Счёт закрыт: " + status);
@@ -2847,10 +3068,10 @@ async function pay(provider) {
             });
         } else if (link.action === "open_telegram_link" && tg?.openTelegramLink && isTelegramLink(link.url)) {
             tg.openTelegramLink(link.url);
-            waitForPaymentActivation(link.paymentId, plan, false);
+            waitForPaymentActivation(link.paymentId, plan, purchaseMode, false);
         } else if (link.action === "open_telegram_link" && tg?.openLink) {
             tg.openLink(link.url);
-            waitForPaymentActivation(link.paymentId, plan, false);
+            waitForPaymentActivation(link.paymentId, plan, purchaseMode, false);
         } else if (tg?.openLink) {
             tg.openLink(link.url);
             setPaymentBusy(false);
@@ -2864,14 +3085,18 @@ async function pay(provider) {
     }
 }
 
-async function waitForPaymentActivation(paymentId, plan, optimistic = false) {
+async function waitForPaymentActivation(paymentId, plan, purchaseMode, optimistic = false) {
     toast(optimistic ? "Оплата получена. Активирую доступ..." : "Счёт создан. Жду подтверждение оплаты...");
     for (let attempt = 0; attempt < 12; attempt += 1) {
         await delay(attempt < 2 ? 650 : 1000);
         try {
             const status = await api(`/api/payments/${paymentId}/status`, { method: "GET" });
             state.boot = await api("/api/bootstrap", { method: "GET" });
-            if (status.subscriptionActive || state.boot.subscription?.active) {
+            if (purchaseMode === "face" && (status.status === "PAID" || Number(status.faceCredits || 0) > 0)) {
+                showFacePurchaseUnlocked();
+                return;
+            }
+            if (purchaseMode !== "face" && (status.subscriptionActive || state.boot.subscription?.active)) {
                 showAccessUnlocked(plan);
                 toast("BodyPro активирован.");
                 return;
@@ -2879,6 +3104,10 @@ async function waitForPaymentActivation(paymentId, plan, optimistic = false) {
         } catch (_) {
             try {
                 state.boot = await api("/api/bootstrap", { method: "GET" });
+                if (purchaseMode === "face" && Number(state.boot.faceAnalysis?.credits || 0) > 0) {
+                    showFacePurchaseUnlocked();
+                    return;
+                }
                 if (state.boot.subscription?.active) {
                     showAccessUnlocked(plan);
                     toast("BodyPro активирован.");
@@ -2903,9 +3132,17 @@ function setPaymentBusy(busy) {
 
 function showReturnPaymentNotice() {
     const paymentId = new URLSearchParams(window.location.search).get("payment");
-    if (!paymentId || !state.boot?.subscription?.active) return null;
+    if (!paymentId) return null;
     const key = `bodylab:payment-notice:${paymentId}`;
     if (sessionStorage.getItem(key)) return null;
+    if (!state.boot?.subscription?.active && Number(state.boot?.faceAnalysis?.credits || 0) > 0) {
+        state.view = "analysis";
+        state.analysisStep = 3;
+        sessionStorage.setItem(key, "1");
+        window.history.replaceState(null, "", window.location.pathname);
+        return { face: true };
+    }
+    if (!state.boot?.subscription?.active) return null;
     const plan = state.boot.plans.find(item => item.code === state.boot.subscription.planCode) || selectedPlan();
     state.accessNotice = accessNoticeText(plan);
     state.view = "dashboard";
@@ -2928,6 +3165,17 @@ function showAccessUnlocked(plan) {
     openAccessModal(plan);
 }
 
+function showFacePurchaseUnlocked() {
+    state.busy.payment = false;
+    state.paymentMode = "subscription";
+    closeModals();
+    state.view = "analysis";
+    state.analysisStep = 3;
+    renderNav();
+    render();
+    toast("Оценка оплачена. Можно запускать анализ.");
+}
+
 function openAccessModal(plan) {
     document.querySelector("#accessTitle").textContent = "BodyPro активирован";
     document.querySelector("#accessSubtitle").textContent = accessNoticeText(plan);
@@ -2939,7 +3187,8 @@ function delay(ms) {
 }
 
 async function activateDemo() {
-    const plan = selectedPlan();
+    const plan = currentPaymentOffer();
+    const purchaseMode = state.paymentMode;
     try {
         await api("/api/payments/demo/activate", {
             method: "POST",
@@ -2947,8 +3196,12 @@ async function activateDemo() {
         });
         closeModals();
         await bootstrap();
-        showAccessUnlocked(plan);
-        toast("Демо-доступ активирован.");
+        if (purchaseMode === "face") {
+            showFacePurchaseUnlocked();
+        } else {
+            showAccessUnlocked(plan);
+            toast("Демо-доступ активирован.");
+        }
     } catch (error) {
         toast(error.message);
     }
@@ -3001,7 +3254,9 @@ function loadLocalState() {
     const battle = readJson(storageKey("battle"), {});
     state.battleOpponent = battleOpponents.some(item => item.id === battle.opponent) ? battle.opponent : state.battleOpponent;
     const battleNames = new Set(battleOpponents.map(item => item.name));
-    state.battleHistory = Array.isArray(battle.history) ? battle.history.filter(item => battleNames.has(item.name)).slice(0, 20) : [];
+    state.battleHistory = Array.isArray(battle.history)
+            ? battle.history.filter(item => item.method === "ai-v2" && battleNames.has(item.name)).slice(0, 20)
+            : [];
 }
 
 function readJson(key, fallback) {
@@ -3505,45 +3760,47 @@ function battleOwnScore() {
 
 async function runBattle() {
     if (state.busy.battle) return;
-    const ownScore = battleOwnScore();
-    if (!ownScore) {
-        toast("Сначала загрузи фото или сделай анализ лица.");
+    if (!state.files.front && !state.previews.front) {
+        toast("Сначала добавь фото лица в разделе анализа.");
         return;
     }
+    const opponent = selectedBattleOpponent();
+    const form = new FormData();
+    appendImageToForm(form, "photo", state.files.front, state.previews.front);
+    form.append("opponentId", opponent.id);
     state.busy.battle = true;
     render();
-    await delay(720);
-    const opponent = randomBattleOpponent();
-    state.battleOpponent = opponent.id;
-    const swing = Math.round((Math.random() - 0.5) * 8);
-    const finalOwn = Math.max(1, Math.min(100, ownScore + swing));
-    const delta = finalOwn - opponent.score;
-    const result = Math.abs(delta) <= 3 ? "tie" : delta > 0 ? "win" : "lose";
-    const eloDelta = result === "win" ? 18 : result === "tie" ? 4 : -12;
-    state.battleResult = {
-        result,
-        opponentId: opponent.id,
-        image: opponent.image,
-        tier: opponent.tier,
-        name: opponent.name,
-        ownScore: finalOwn,
-        opponentScore: opponent.score,
-        eloDelta,
-        advice: battleAdvice(result, delta)
-    };
-    state.battleHistory.unshift({ ...state.battleResult, createdAt: new Date().toISOString() });
-    state.battleHistory = state.battleHistory.slice(0, 20);
-    state.busy.battle = false;
-    saveBattleState();
-    render();
-    toast(result === "win" ? "Победа в баттле." : result === "tie" ? "Почти ровно." : "Есть что усилить.");
-}
-
-function randomBattleOpponent() {
-    if (battleOpponents.length <= 1) return battleOpponents[0];
-    const lastId = state.battleResult?.opponentId || "";
-    const pool = battleOpponents.filter(item => item.id !== lastId);
-    return pool[Math.floor(Math.random() * pool.length)] || battleOpponents[0];
+    try {
+        const response = await fetch(apiPath("/api/battle"), {
+            method: "POST",
+            headers: { "X-Telegram-Init-Data": tg?.initData || "" },
+            body: form
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Не удалось сравнить фото");
+        const delta = Number(data.ownScore) - Number(data.opponentScore);
+        const result = data.result;
+        const eloDelta = result === "win"
+                ? Math.min(24, 12 + Math.max(0, delta))
+                : result === "tie" ? 2 : -Math.min(20, 10 + Math.max(0, -delta));
+        state.battleResult = {
+            ...data,
+            image: opponent.image,
+            tier: opponent.tier,
+            method: "ai-v2",
+            eloDelta,
+            advice: data.summary || battleAdvice(result, delta)
+        };
+        state.battleHistory.unshift({ ...state.battleResult, createdAt: new Date().toISOString() });
+        state.battleHistory = state.battleHistory.slice(0, 20);
+        saveBattleState();
+        toast(result === "win" ? "Победа по результату AI-сравнения." : result === "tie" ? "AI оценил фото почти одинаково." : "AI-сравнение завершено.");
+    } catch (error) {
+        toast(error.message);
+    } finally {
+        state.busy.battle = false;
+        render();
+    }
 }
 
 function battleElo() {
@@ -3583,13 +3840,30 @@ function createTypingRenderer(assistant) {
     return {
         queue: "",
         active: false,
+        instant: false,
         lastPaint: 0,
         idleResolvers: [],
         push(delta) {
             const cleanDelta = cleanAssistantText(delta);
             if (!cleanDelta) return;
+            if (this.instant) {
+                assistant.text = cleanAssistantText(assistant.text + cleanDelta);
+                assistant.pending = true;
+                saveChatHistory();
+                return;
+            }
             this.queue += cleanDelta;
             this.run();
+        },
+        flush() {
+            this.instant = true;
+            if (this.queue) {
+                assistant.text = cleanAssistantText(assistant.text + this.queue);
+                this.queue = "";
+            }
+            assistant.pending = true;
+            this.paint();
+            this.resolveIdle();
         },
         async run() {
             if (this.active) return;
@@ -3611,8 +3885,10 @@ function createTypingRenderer(assistant) {
         paint() {
             this.lastPaint = Date.now();
             saveChatHistory();
-            if (!paintChatMessage(assistant)) render();
-            scrollChatToBottom();
+            if (state.view === "gpt") {
+                paintChatMessage(assistant);
+                scrollChatToBottom();
+            }
         },
         waitForIdle() {
             if (!this.active && !this.queue.length) return Promise.resolve();
@@ -3697,6 +3973,7 @@ function formatChatText(text) {
 
 function cleanPublicText(text) {
     return String(text || "")
+        .replace(/меваинг|мевинг/giu, "мьюнинг")
         .replace(/(?:ИИ|AI|искусственный интеллект)[^.?!]*(?:диагноз|диагнозы|медицин)[^.?!]*[.?!]?/giu, "")
         .replace(/не является медицинской рекомендацией[.?!]?/giu, "")
         .replace(/\s{2,}/g, " ")
@@ -3736,6 +4013,14 @@ function selectedPlan() {
     return state.boot.plans.find(plan => plan.code === state.selectedPlan) || state.boot.plans[0];
 }
 
+function faceAnalysisOffer() {
+    return state.boot?.faceAnalysis?.offer || null;
+}
+
+function currentPaymentOffer() {
+    return state.paymentMode === "face" ? faceAnalysisOffer() : selectedPlan();
+}
+
 function formatUsd(value) {
     return Number(value || 0).toLocaleString("ru-RU", {
         minimumFractionDigits: 2,
@@ -3752,16 +4037,16 @@ function isPro() {
 }
 
 function canRunFaceAnalysis() {
-    if (!isPro() && hasUsedFreeFaceAnalysis()) return false;
-    return analysisCooldownRemaining("face") <= 0;
+    if (!hasFaceAnalysisEntitlement()) return false;
+    return !isPro() || analysisCooldownRemaining("face") <= 0;
 }
 
 function isStyleMetric(name) {
     return /стиль|style|подач|гардероб|образ/i.test(String(name || ""));
 }
 
-function hasUsedFreeFaceAnalysis() {
-    return Boolean(state.analysis || state.boot?.hasFaceAnalysis);
+function hasFaceAnalysisEntitlement() {
+    return isPro() || Number(state.boot?.faceAnalysis?.credits || 0) > 0;
 }
 
 function featureCooldownRemaining(id) {
@@ -3772,6 +4057,7 @@ function featureCooldownRemaining(id) {
 }
 
 function analysisCooldownRemaining(id) {
+    if (id === "face" && isPro() && state.analysis?.accessLevel === "standalone") return 0;
     const timestamp = analysisTimestamp(id);
     if (!timestamp) return 0;
     const cooldown = id === "body" ? BODY_ANALYSIS_COOLDOWN_MS : PHOTO_ANALYSIS_COOLDOWN_MS;
@@ -3923,52 +4209,26 @@ function toolUploadKind(id) {
     return `tool-${id}`;
 }
 
-function toolAssessment(id, tool, previous) {
-    const names = (tool.metrics || []).map(([name]) => name);
-    const count = (state.toolHistory[id] || []).length;
-    const baseSeed = Math.abs(hashString(`${id}:${state.boot?.user?.telegramId || "guest"}:${count}:${Date.now()}`));
-    const metrics = names.map((name, index) => {
-        const previousValue = metricMap(previous?.metrics)[name];
-        const raw = 54 + ((baseSeed + index * 17) % 35);
-        const value = previousValue
-            ? clampPercent(previousValue + (((baseSeed >> (index + 1)) % 17) - 8))
-            : clampPercent(raw);
-        return { name, value, hint: toolMetricHint(value) };
-    });
-    const score = Math.round(metrics.reduce((sum, item) => sum + item.value, 0) / Math.max(1, metrics.length));
-    const strongest = metrics.slice().sort((a, b) => b.value - a.value)[0];
-    const weakest = metrics.slice().sort((a, b) => a.value - b.value)[0];
-    return {
-        score,
-        title: score >= 82 ? "Сильный блок" : score >= 66 ? "Хорошая база" : "Есть быстрые победы",
-        headline: toolHeadline(id, score),
-        summary: `${strongest.name} выглядит сильнее всего. Ближайший фокус — ${weakest.name.toLowerCase()}.`,
-        metrics,
-        tasks: toolTasksFor(id, tool, weakest?.name),
-        planText: `Добавь фокус “${weakest.name}” в отчёт дня и повтори фото после 3-5 действий.`
-    };
-}
-
 function normalizeToolReport(id, tool, data) {
-    const fallback = toolAssessment(id, tool, null);
     const metrics = Array.isArray(data.metrics)
         ? data.metrics.map((item, index) => ({
-            name: item.name || fallback.metrics[index]?.name || `Метрика ${index + 1}`,
+            name: item.name || tool.metrics?.[index]?.[0] || `Метрика ${index + 1}`,
             value: clampPercent(item.value),
             hint: cleanPublicText(item.hint || toolMetricHint(clampPercent(item.value)))
         })).slice(0, 5)
-        : fallback.metrics;
+        : [];
+    if (!metrics.length) throw new Error("AI не вернул проверяемые метрики для этого фото.");
     const score = clampPercent(data.score || Math.round(metrics.reduce((sum, item) => sum + item.value, 0) / Math.max(1, metrics.length)));
     return {
         score,
-        title: cleanPublicText(data.title || fallback.title),
-        headline: cleanPublicText(data.headline || fallback.headline),
-        summary: cleanPublicText(data.summary || fallback.summary),
+        title: cleanPublicText(data.title || (score >= 82 ? "Сильный блок" : score >= 66 ? "Хорошая база" : "Есть быстрые победы")),
+        headline: cleanPublicText(data.headline || toolHeadline(id, score)),
+        summary: cleanPublicText(data.summary || "Вывод собран только по видимым признакам на загруженном фото."),
         metrics,
         tasks: Array.isArray(data.tasks) && data.tasks.length
             ? data.tasks.map(item => cleanPublicText(item)).filter(Boolean).slice(0, 4)
-            : fallback.tasks,
-        planText: cleanPublicText(data.planText || fallback.planText)
+            : (tool.tasks || []).slice(0, 4),
+        planText: cleanPublicText(data.planText || "Добавь ближайший фокус в отчёт дня и повтори фото после нескольких действий.")
     };
 }
 
@@ -3999,15 +4259,6 @@ function toolTasksFor(id, tool, focus) {
         looks: "Выбери один референс подачи и повтори только свет, волосы или позу."
     }[id];
     return extra ? [...base, extra].slice(0, 4) : base;
-}
-
-function hashString(value) {
-    let hash = 0;
-    for (let i = 0; i < value.length; i += 1) {
-        hash = ((hash << 5) - hash) + value.charCodeAt(i);
-        hash |= 0;
-    }
-    return hash;
 }
 
 function clampPercent(value) {
@@ -4178,10 +4429,16 @@ function bindGlobal() {
             blurActiveInput();
         }
     });
-    document.querySelector("#menuButton").addEventListener("click", openDrawer);
+    document.querySelector("#menuButton").addEventListener("click", () => {
+        if (state.view === "dashboard" || state.view === "onboarding") {
+            openDrawer();
+        } else {
+            navigateBack();
+        }
+    });
     document.querySelector("#closeDrawer").addEventListener("click", closeDrawer);
     document.querySelector("#scrim").addEventListener("click", closeDrawer);
-    document.querySelector("#brandButton").addEventListener("click", () => setView("dashboard"));
+    document.querySelector("#brandButton").addEventListener("click", goDashboard);
     document.querySelector("#settingsButton").addEventListener("click", () => {
         document.querySelector("#ageInput").value = state.settings.age;
         updateSettingButtons("gender", state.settings.gender);

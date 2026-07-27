@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -16,62 +18,79 @@ public class AnalysisService {
     private final AiService ai;
     private final AnalysisRepository reports;
     private final ObjectMapper objectMapper;
+    private final FaceAnalysisAccessService faceAccess;
 
-    public AnalysisService(AiService ai, AnalysisRepository reports, ObjectMapper objectMapper) {
+    public AnalysisService(AiService ai,
+                           AnalysisRepository reports,
+                           ObjectMapper objectMapper,
+                           FaceAnalysisAccessService faceAccess) {
         this.ai = ai;
         this.reports = reports;
         this.objectMapper = objectMapper;
+        this.faceAccess = faceAccess;
     }
 
     public Map<String, Object> analyze(UserProfile user, List<UploadedImage> images, boolean pro) {
-        if (!pro && reports.existsByTelegramId(user.telegramId())) {
-            throw new IllegalStateException("Повторный анализ лица открыт с BodyPro");
+        if (!pro && !faceAccess.hasCredit(user.telegramId())) {
+            throw new IllegalStateException("Сначала оплати оценку лица или подключи BodyPro");
         }
         List<String> dataUrls = images.stream()
                 .filter(image -> image.bytes().length > 0)
                 .limit(2)
                 .map(image -> "data:" + image.contentType() + ";base64," + Base64.getEncoder().encodeToString(image.bytes()))
                 .toList();
-        if (pro) {
-            try {
-                JsonNode aiReport = ai.analyzeFaceWithAi(dataUrls, user.gender(), user.age()).orElse(null);
-                if (aiReport != null && aiReport.has("score")) {
-                    int score = clamp(aiReport.path("score").asInt(78), 45, 98);
-                    reports.save(user.telegramId(), score, aiReport.toString());
-                    return objectMapper.convertValue(aiReport, Map.class);
-                }
-            } catch (Exception ignored) {
-                // Local report below keeps UX uninterrupted when multimodal AI is unavailable.
-            }
-        }
-        int seed = (int) Math.abs((user.telegramId() + images.size() * 37) % 19);
-        int score = 73 + seed;
-        Map<String, Object> report = Map.of(
-                "score", score,
-                "summary", "База выглядит сильной: лучше всего сработают чистый контур стрижки, выравнивание тона кожи и более спокойная подача в кадре.",
-                "metrics", List.of(
-                        metric("Гармония", clamp(score - 2, 0, 100), "Черты читаются цельно, можно усилить контур."),
-                        metric("Кожа", clamp(68 + seed, 0, 100), "Главный быстрый выигрыш даст стабильный уход."),
-                        metric("Углы", clamp(70 + seed / 2, 0, 100), "Фронтальное фото стоит повторить с мягким верхним светом."),
-                        metric("Фото", clamp(64 + seed, 0, 100), "Свет, ракурс и выражение можно сделать чище.")
-                ),
-                "zones", List.of(
-                        zone("Кожа", "выравнивание", "Утро: мягкое очищение, увлажнение, SPF. Вечер: очищение и восстановление барьера."),
-                        zone("Волосы", "контур", "Попроси мастера оставить аккуратный вес сверху и чище оформить виски."),
-                        zone("Фото", "подача", "Камера на уровне глаз, нейтральное выражение, свет из окна под 45 градусов.")
-                ),
-                "routine", List.of(
-                        "7 дней: стабилизировать сон и воду, убрать случайные эксперименты с кожей.",
-                        "14 дней: подобрать стрижку под форму лица и сделать 3 контрольных фото.",
-                        "30 дней: закрепить уход, питание и контрольные фото как повторяемую систему."
-                ),
-                "lockedPersonalPlan", !pro
-        );
         try {
-            reports.save(user.telegramId(), score, objectMapper.writeValueAsString(report));
-        } catch (Exception ignored) {
-            reports.save(user.telegramId(), score, report.toString());
+            JsonNode aiReport = ai.analyzeFaceWithAi(dataUrls, user.gender(), user.age())
+                    .orElseThrow(() -> new IllegalStateException("AI-анализ сейчас недоступен. Попробуй ещё раз немного позже."));
+            validatePhoto(aiReport, "Нужно крупное фото открытого лица без фильтров и сильного ракурса.");
+            if (!"face".equalsIgnoreCase(aiReport.path("photoType").asText())) {
+                throw new IllegalStateException("Это не фото лица для анализа. Загрузи крупный анфас.");
+            }
+            if (!aiReport.has("score") || !aiReport.path("metrics").isArray() || aiReport.path("metrics").size() < 5) {
+                throw new IllegalStateException("AI не вернул полный результат. Попробуй другое фото при ровном свете.");
+            }
+            int score = calibratedScore(aiReport, dataUrls.size());
+            Map<String, Object> report = new LinkedHashMap<>(objectMapper.convertValue(aiReport, Map.class));
+            report.put("score", score);
+            report.put("lockedPersonalPlan", !pro);
+            report.put("accessLevel", pro ? "pro" : "standalone");
+            if (!pro && !faceAccess.consume(user.telegramId())) {
+                throw new IllegalStateException("Оплаченная оценка уже использована");
+            }
+            reports.save(user.telegramId(), score, objectMapper.writeValueAsString(report), pro);
+            return pro ? report : limitedReport(report);
+        } catch (IllegalStateException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Не удалось получить настоящий AI-анализ. Попробуй ещё раз позже.", ex);
         }
+    }
+
+    public Map<String, Object> analyzeBody(UserProfile user, BodyProfile profile, UploadedImage image) {
+        if (image == null || image.bytes().length == 0) {
+            throw new IllegalStateException("Сначала загрузи фото формы");
+        }
+        String dataUrl = "data:" + image.contentType() + ";base64,"
+                + Base64.getEncoder().encodeToString(image.bytes());
+        JsonNode aiReport = ai.analyzeBodyWithAi(
+                        dataUrl,
+                        profile.height(),
+                        profile.weight(),
+                        profile.waist(),
+                        profile.goal(),
+                        user.gender(),
+                        user.age()
+                )
+                .orElseThrow(() -> new IllegalStateException("AI-анализ формы сейчас недоступен. Попробуй позже."));
+        validatePhoto(aiReport, "Нужен кадр минимум от плеч до бёдер в прилегающей или спортивной одежде.");
+        if (!"body".equalsIgnoreCase(aiReport.path("photoType").asText())) {
+            throw new IllegalStateException("Нужно фото формы тела, а не портрет или случайный кадр.");
+        }
+        if (!aiReport.path("metrics").isArray() || aiReport.path("metrics").size() < 4) {
+            throw new IllegalStateException("Не удалось надёжно оценить форму по этому фото.");
+        }
+        Map<String, Object> report = new LinkedHashMap<>(objectMapper.convertValue(aiReport, Map.class));
+        report.put("score", calibratedScore(aiReport, 1));
         return report;
     }
 
@@ -79,9 +98,7 @@ public class AnalysisService {
         List<String> dataUrls = image == null || image.bytes().length == 0
                 ? List.of()
                 : List.of("data:" + image.contentType() + ";base64," + Base64.getEncoder().encodeToString(image.bytes()));
-        if (pro) {
-            try {
-                JsonNode aiReport = ai.analyzeToolWithAi(
+        JsonNode aiReport = ai.analyzeToolWithAi(
                         tool.title(),
                         tool.text(),
                         tool.metrics(),
@@ -89,48 +106,60 @@ public class AnalysisService {
                         dataUrls,
                         user.gender(),
                         user.age()
-                ).orElse(null);
-                if (aiReport != null && aiReport.has("score")) {
-                    return objectMapper.convertValue(aiReport, Map.class);
-                }
-            } catch (Exception ignored) {
-                // Local report below keeps the tool useful when multimodal AI is unavailable.
-            }
+                )
+                .orElseThrow(() -> new IllegalStateException("AI-анализ сейчас недоступен. Попробуй ещё раз немного позже."));
+        validatePhoto(aiReport, "Нужно чёткое фото, на котором полностью видна зона этого анализа.");
+        if (!aiReport.has("score") || !aiReport.path("metrics").isArray()) {
+            throw new IllegalStateException("AI не вернул полный результат. Попробуй другое фото.");
         }
-        int seed = Math.abs((int) ((user.telegramId() + tool.id().hashCode()) % 23));
-        List<Map<String, Object>> metrics = new ArrayList<>();
-        for (int i = 0; i < tool.metrics().size(); i += 1) {
-            int value = clamp(58 + ((seed + i * 13) % 30), 0, 100);
-            metrics.add(metric(tool.metrics().get(i), value, value >= 75 ? "сильно" : value >= 62 ? "норм" : "фокус"));
-        }
-        int score = metrics.stream()
-                .mapToInt(item -> Number.class.cast(item.get("value")).intValue())
-                .sum() / Math.max(1, metrics.size());
-        String weakest = metrics.stream()
-                .min((a, b) -> Integer.compare(Number.class.cast(a.get("value")).intValue(), Number.class.cast(b.get("value")).intValue()))
-                .map(item -> item.get("name").toString())
-                .orElse(tool.metrics().isEmpty() ? "фокус" : tool.metrics().get(0));
-        return Map.of(
-                "score", score,
-                "title", score >= 82 ? "Сильный блок" : score >= 66 ? "Хорошая база" : "Есть быстрые победы",
-                "headline", tool.title() + ": разбор готов",
-                "summary", "Самый важный ближайший фокус — " + weakest.toLowerCase() + ".",
-                "metrics", metrics,
-                "tasks", tool.tasks(),
-                "planText", "Добавь фокус “" + weakest + "” в отчёт дня и повтори фото после нескольких действий."
-        );
-    }
-
-    private static Map<String, Object> metric(String name, int value, String hint) {
-        return Map.of("name", name, "value", value, "hint", hint);
-    }
-
-    private static Map<String, Object> zone(String name, String status, String advice) {
-        return Map.of("name", name, "status", status, "advice", advice);
+        Map<String, Object> report = new LinkedHashMap<>(objectMapper.convertValue(aiReport, Map.class));
+        report.put("score", calibratedScore(aiReport, 1));
+        return report;
     }
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static void validatePhoto(JsonNode report, String fallback) {
+        if (!report.path("photoValid").asBoolean(false)) {
+            String reason = report.path("rejectReason").asText("").trim();
+            throw new IllegalStateException(reason.isBlank() ? fallback : reason);
+        }
+        if (report.path("qualityScore").asInt(0) < 35) {
+            throw new IllegalStateException(fallback);
+        }
+    }
+
+    private static int calibratedScore(JsonNode report, int imageCount) {
+        List<Integer> values = new ArrayList<>();
+        report.path("metrics").forEach(metric -> {
+            if (metric.has("value")) values.add(clamp(metric.path("value").asInt(), 0, 100));
+        });
+        if (values.size() < 4) {
+            throw new IllegalStateException("Недостаточно видимых метрик для честной оценки.");
+        }
+        values.sort(Comparator.naturalOrder());
+        List<Integer> core = values.size() >= 6 ? values.subList(1, values.size() - 1) : values;
+        double raw = core.stream().mapToInt(Integer::intValue).average().orElse(50);
+        int quality = clamp(report.path("qualityScore").asInt(60), 0, 100);
+        double calibrated = 50 + (raw - 50) * 0.78;
+        calibrated -= Math.max(0, 70 - quality) * 0.22;
+        int cap = quality < 55 ? 72 : quality < 70 ? 80 : imageCount < 2 ? 88 : 94;
+        if (raw < 90) cap = Math.min(cap, 89);
+        return clamp((int) Math.round(calibrated), 20, cap);
+    }
+
+    private static Map<String, Object> limitedReport(Map<String, Object> full) {
+        Map<String, Object> limited = new LinkedHashMap<>();
+        limited.put("score", full.get("score"));
+        limited.put("summary", full.getOrDefault("summary", ""));
+        limited.put("accessLevel", "standalone");
+        limited.put("metricsLocked", true);
+        Object metrics = full.get("metrics");
+        limited.put("metricCount", metrics instanceof List<?> list ? list.size() : 0);
+        limited.put("upgradeText", "BodyPro откроет полную карту метрик и персональные действия по каждой зоне.");
+        return limited;
     }
 
     public record UploadedImage(String contentType, byte[] bytes) {
@@ -146,5 +175,8 @@ public class AnalysisService {
     }
 
     public record ToolProfile(String id, String title, String text, List<String> metrics, List<String> tasks) {
+    }
+
+    public record BodyProfile(int height, int weight, int waist, String goal) {
     }
 }

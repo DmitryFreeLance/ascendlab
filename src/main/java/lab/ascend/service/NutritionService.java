@@ -4,6 +4,7 @@ import lab.ascend.repo.NutritionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
+import java.util.Base64;
 import java.util.Map;
 
 @Service
@@ -20,6 +21,21 @@ public class NutritionService {
         AiService.NutritionEstimate estimate = pro
                 ? ai.estimateMealWithAi(text, mealType).orElseGet(() -> heuristic(text))
                 : heuristic(text);
+        nutrition.add(telegramId, mealType, estimate.title(), estimate.calories(), estimate.protein(), estimate.fat(), estimate.carbs());
+        return summary(telegramId);
+    }
+
+    public Map<String, Object> addPhoto(long telegramId,
+                                        String mealType,
+                                        String text,
+                                        String contentType,
+                                        byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalStateException("Сначала загрузи фото тарелки");
+        }
+        String dataUrl = "data:" + contentType + ";base64," + Base64.getEncoder().encodeToString(bytes);
+        AiService.NutritionEstimate estimate = ai.estimateMealPhotoWithAi(dataUrl, text, mealType)
+                .orElseThrow(() -> new IllegalStateException("Не удалось распознать еду на фото. Попробуй кадр сверху при хорошем свете."));
         nutrition.add(telegramId, mealType, estimate.title(), estimate.calories(), estimate.protein(), estimate.fat(), estimate.carbs());
         return summary(telegramId);
     }

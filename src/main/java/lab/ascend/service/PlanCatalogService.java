@@ -22,7 +22,37 @@ public class PlanCatalogService {
     }
 
     public PlanOffer get(String code) {
+        if (FaceAnalysisAccessService.FIRST_PRODUCT.equalsIgnoreCase(code)) {
+            return faceAnalysisOffer(true);
+        }
+        if (FaceAnalysisAccessService.STANDARD_PRODUCT.equalsIgnoreCase(code)) {
+            return faceAnalysisOffer(false);
+        }
         return offer(Plan.byCode(code));
+    }
+
+    public PlanOffer faceAnalysisOffer(boolean introAvailable) {
+        return introAvailable
+                ? new PlanOffer(
+                FaceAnalysisAccessService.FIRST_PRODUCT,
+                "Первая оценка лица",
+                "Итоговая оценка без детальной карты метрик",
+                0,
+                49,
+                25,
+                new BigDecimal("0.60"),
+                "-50%"
+        )
+                : new PlanOffer(
+                FaceAnalysisAccessService.STANDARD_PRODUCT,
+                "Оценка лица",
+                "Итоговая оценка без детальной карты метрик",
+                0,
+                99,
+                49,
+                new BigDecimal("1.20"),
+                ""
+        );
     }
 
     public PlanOffer update(String code, int rub, int stars, BigDecimal usd, String badge) {

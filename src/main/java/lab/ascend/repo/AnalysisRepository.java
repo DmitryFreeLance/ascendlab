@@ -19,12 +19,12 @@ public class AnalysisRepository {
         this.jdbc = jdbc;
     }
 
-    public void save(long telegramId, int score, String json) {
+    public void save(long telegramId, int score, String json, boolean communityEligible) {
         jdbc.update("""
-                        INSERT INTO analysis_reports (id, telegram_id, score, report_json)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO analysis_reports (id, telegram_id, score, report_json, community_eligible)
+                        VALUES (?, ?, ?, ?, ?)
                         """,
-                UUID.randomUUID().toString(), telegramId, score, json);
+                UUID.randomUUID().toString(), telegramId, score, json, communityEligible);
     }
 
     public boolean existsByTelegramId(long telegramId) {
@@ -40,6 +40,7 @@ public class AnalysisRepository {
         List<ScoreRow> rows = jdbc.query("""
                         SELECT telegram_id, score, created_at
                         FROM analysis_reports
+                        WHERE community_eligible = TRUE
                         ORDER BY telegram_id, created_at DESC, id DESC
                         """,
                 (result, rowNum) -> new ScoreRow(

@@ -77,10 +77,42 @@ public class AnalysisController {
         return analysis.analyzeTool(user, tool, toImage(photo), pro);
     }
 
+    @PostMapping(value = "/body", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> analyzeBody(
+            @RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData,
+            @RequestPart("photo") MultipartFile photo,
+            @RequestPart("height") String height,
+            @RequestPart("weight") String weight,
+            @RequestPart("waist") String waist,
+            @RequestPart("goal") String goal) throws IOException {
+        UserProfile user = currentUser.require(initData);
+        if (!subscriptions.isActive(user.telegramId())) {
+            throw new IllegalStateException("Body Max доступен с BodyPro");
+        }
+        AnalysisService.BodyProfile profile = new AnalysisService.BodyProfile(
+                clampNumber(height, 130, 230, 180),
+                clampNumber(weight, 35, 180, 78),
+                clampNumber(waist, 45, 180, 84),
+                switch (goal) {
+                    case "muscle", "cut" -> goal;
+                    default -> "recomp";
+                }
+        );
+        return analysis.analyzeBody(user, profile, toImage(photo));
+    }
+
     private AnalysisService.UploadedImage toImage(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
             return null;
         }
         return new AnalysisService.UploadedImage(file.getContentType() == null ? "image/jpeg" : file.getContentType(), file.getBytes());
+    }
+
+    private int clampNumber(String value, int min, int max, int fallback) {
+        try {
+            return Math.max(min, Math.min(max, Integer.parseInt(value)));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 }
