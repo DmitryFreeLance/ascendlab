@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,6 +17,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 @RestController
 @RequestMapping("/api/battle")
@@ -39,16 +39,15 @@ public class BattleController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Map<String, Object> compare(
             @RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData,
-            @RequestPart("photo") MultipartFile photo,
-            @RequestParam("opponentId") String opponentId) throws IOException {
+            @RequestPart("photo") MultipartFile photo) throws IOException {
         currentUser.require(initData);
         if (photo == null || photo.isEmpty()) {
             throw new IllegalArgumentException("Добавь фото для честного сравнения.");
         }
-        Opponent opponent = OPPONENTS.get(opponentId);
-        if (opponent == null) {
-            throw new IllegalArgumentException("Неизвестный контрольный соперник.");
-        }
+        List<Map.Entry<String, Opponent>> draw = List.copyOf(OPPONENTS.entrySet());
+        Map.Entry<String, Opponent> selected = draw.get(ThreadLocalRandom.current().nextInt(draw.size()));
+        String opponentId = selected.getKey();
+        Opponent opponent = selected.getValue();
 
         byte[] opponentBytes = new ClassPathResource(opponent.resourcePath()).getContentAsByteArray();
         String ownDataUrl = dataUrl(photo.getContentType(), photo.getBytes());

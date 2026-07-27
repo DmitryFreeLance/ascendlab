@@ -937,6 +937,11 @@ function renderDashboard() {
         <h2>Полный доступ ко всем функциям</h2>
         <div class="plan-list">${state.boot.plans.map(planCard).join("")}</div>
         <button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Получить доступ</button>
+        <button class="academy-entry-card" data-view="academy">
+            <span class="icon-shell"><i data-lucide="graduation-cap"></i></span>
+            <span><strong>Академия · гайды</strong><small>Можно открыть без BodyPro</small></span>
+            <em>Открыть</em>
+        </button>
     </section>`}
     <section class="section-panel">
         <p class="eyebrow">Быстрые функции</p>
@@ -1236,7 +1241,11 @@ function renderAnalysisMetricDetail(result, metricId) {
         <div class="metric-detail-score"><strong>${Math.max(0, Math.min(100, Number(metric.value) || 0))}</strong><span>/100</span></div>
         <h1>${escapeHtml(metric.name || "Метрика")}</h1>
         <p class="muted">${escapeHtml(cleanPublicText(metric.details || metric.hint || ""))}</p>
-        ${actions.length ? `<div class="analysis-plan-card"><p class="eyebrow">Что делать</p><ol class="routine-list">${actions.map(action => `<li>${escapeHtml(action)}</li>`).join("")}</ol></div>` : ""}
+        ${actions.length ? `<div class="analysis-plan-card metric-actions-card">
+            <p class="eyebrow">Что делать?</p>
+            <p class="metric-gpt-note">Для полного разбора проконсультируйтесь с BodyGPT.</p>
+            <ol class="routine-list">${actions.map(action => `<li>${escapeHtml(action)}</li>`).join("")}</ol>
+        </div>` : ""}
         <button class="button primary" data-action="ask-gpt" data-prompt="${escapeHtml(`Разбери мою метрику «${metric.name}» (${metric.value}/100): ${metric.details || metric.hint || ""}. Что конкретно делать?`)}"><i data-lucide="brain"></i>Проконсультироваться с BodyGPT</button>
     </section>`;
 }
@@ -1586,6 +1595,10 @@ function renderAcademy() {
         <p class="eyebrow">Академия</p>
         <h1>Гайды</h1>
         <p class="muted">Большие справочники с чеклистами и конкретными правилами: уход, волосы, фото, тело, стиль и осознанные решения.</p>
+        ${!isPro() ? `<div class="academy-open-callout">
+            <span class="icon-shell"><i data-lucide="book-open-check"></i></span>
+            <div><strong>Гайды доступны без BodyPro</strong><p>Академию можно открыть и начать изучать без подписки.</p></div>
+        </div>` : ""}
         <div class="segmented guide-track-tabs">
             <button class="${state.guideTrack === "soft" ? "active" : ""}" data-guide-track="soft">Softmaxxing</button>
             <button class="${state.guideTrack === "hard" ? "active" : ""}" data-guide-track="hard">Hardmaxxing</button>
@@ -1809,7 +1822,7 @@ function fallbackGuideKnowledge(category, title) {
 }
 
 function renderBattle() {
-    const opponent = selectedBattleOpponent();
+    const opponent = state.battleResult ? selectedBattleOpponent() : null;
     const ownPreview = state.previews.front;
     const ownScore = battleOwnScore();
     const winrate = state.battleHistory.length
@@ -1819,18 +1832,16 @@ function renderBattle() {
     return `<section class="section-panel battle-arena">
         <p class="eyebrow">MogBattle</p>
         <h1>MogBattle</h1>
-        <p class="muted">Выбери контрольный профиль. AI сравнит оба фото одновременно по одной шкале — без случайной прибавки к баллам и случайного победителя.</p>
+        <p class="muted">Соперник выпадет случайно. AI сравнит оба фото одновременно по одной шкале — без случайной прибавки к баллам и случайного победителя.</p>
         <div class="battle-stats">
             <div class="battle-stat"><small>ELO</small><strong>${elo}</strong></div>
             <div class="battle-stat"><small>Ранг</small><strong>${battleRank(elo)}</strong></div>
             <div class="battle-stat"><small>Winrate</small><strong>${winrate}%</strong></div>
         </div>
-        <div class="opponent-strip" aria-label="Выбор контрольного профиля">
-            ${battleOpponents.map(item => `<button class="opponent-chip ${item.id === opponent.id ? "active" : ""}" data-battle-opponent="${item.id}" aria-pressed="${item.id === opponent.id}">
-                <img src="${item.image}" alt="">
-                <strong>${item.name}</strong>
-                <small>${item.tier}</small>
-            </button>`).join("")}
+        <div class="battle-random-draw">
+            <span class="icon-shell"><i data-lucide="shuffle"></i></span>
+            <div><strong>Случайный соперник</strong><small>Профиль определится только после запуска баттла</small></div>
+            <span class="battle-draw-status">${state.busy.battle ? "поиск…" : "рандом"}</span>
         </div>
         <div class="battle-stage">
             <div class="fighter-card">
@@ -1839,13 +1850,13 @@ function renderBattle() {
                 <small>${ownScore ? `${ownScore}/100` : ownPreview ? "готов к AI-сравнению" : "сначала добавь фото"}</small>
             </div>
             <div class="versus-core">VS</div>
-            <div class="fighter-card">
-                <div class="fighter-photo has-photo"><img src="${opponent.image}" alt=""></div>
-                <strong>${opponent.name}</strong>
-                <small>${state.battleResult ? `${state.battleResult.opponentScore}/100` : "оценится вместе с тобой"}</small>
+            <div class="fighter-card ${opponent ? "" : "mystery"}">
+                <div class="fighter-photo ${opponent ? "has-photo" : ""}">${opponent ? `<img src="${opponent.image}" alt="">` : `<span class="battle-question">?</span>`}</div>
+                <strong>${opponent ? opponent.name : "Случайный профиль"}</strong>
+                <small>${state.battleResult ? `${state.battleResult.opponentScore}/100` : "выпадет при запуске"}</small>
             </div>
         </div>
-        <button class="button primary ${state.busy.battle ? "processing" : ""}" data-action="run-battle" ${state.busy.battle || !ownPreview ? "disabled" : ""}>${buttonContent(ownPreview ? "Сравнить два фото" : "Сначала добавь фото лица", "AI сравнивает фото...", "swords", state.busy.battle)}</button>
+        <button class="button primary ${state.busy.battle ? "processing" : ""}" data-action="run-battle" ${state.busy.battle || !ownPreview ? "disabled" : ""}>${buttonContent(ownPreview ? "Найти соперника и сравнить" : "Сначала добавь фото лица", "Подбираю и сравниваю...", "swords", state.busy.battle)}</button>
         ${state.battleResult ? renderBattleResult() : ""}
         <div class="battle-history-board">
             <p class="eyebrow">История боёв</p>
@@ -2193,28 +2204,31 @@ function resetWater() {
 
 function featureCard(feature) {
     const hot = ["gpt", "body", "battle"].includes(feature.id);
+    const academy = feature.id === "academy";
     const remaining = featureCooldownRemaining(feature.id);
     const timer = remaining > 0
         ? `<small class="feature-timer" ${countdownAttrs(Date.now() + remaining, "Обновление через ")}>Обновление через ${formatDuration(remaining)}</small>`
         : "";
-    return `<button class="feature-card ${hot ? "is-hot" : ""}" data-view="${viewForFeature(feature.id)}">
+    return `<button class="feature-card ${hot ? "is-hot" : ""} ${academy ? "is-academy" : ""}" data-view="${viewForFeature(feature.id)}">
         <span class="icon-shell"><i data-lucide="${feature.icon}"></i></span>
-        <span><strong>${feature.title}</strong><small>${feature.subtitle}</small>${timer}</span>
+        <span><strong>${feature.title}</strong><small>${feature.subtitle}</small>${academy && !isPro() ? `<em class="feature-access-badge">без BodyPro</em>` : ""}${timer}</span>
     </button>`;
 }
 
 function planCard(plan) {
     const selected = state.selectedPlan === plan.code;
-    return `<button class="plan-card ${selected ? "selected" : ""}" data-plan="${plan.code}">
-        <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge ? `<span class="badge">${plan.badge}</span>` : ""}</span>
+    const intro = plan.code === "intro";
+    return `<button class="plan-card ${selected ? "selected" : ""} ${intro ? "intro-offer" : ""}" data-plan="${plan.code}">
+        <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge || intro ? `<span class="badge">${escapeHtml(plan.badge || "Старт")}</span>` : ""}</span>
         <span class="price">${plan.rub} ₽</span>
     </button>`;
 }
 
 function paymentPlanCard(plan) {
     const selected = state.paymentMode === "face" || state.selectedPlan === plan.code;
-    return `<button class="plan-card payment-plan-card ${selected ? "selected" : ""}" data-payment-plan="${plan.code}" ${state.busy.payment ? "disabled" : ""}>
-        <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge ? `<span class="badge">${plan.badge}</span>` : ""}</span>
+    const intro = plan.code === "intro";
+    return `<button class="plan-card payment-plan-card ${selected ? "selected" : ""} ${intro ? "intro-offer" : ""}" data-payment-plan="${plan.code}" ${state.busy.payment ? "disabled" : ""}>
+        <span><strong>${plan.title}</strong><small>${plan.subtitle}</small>${plan.badge || intro ? `<span class="badge">${escapeHtml(plan.badge || "Старт")}</span>` : ""}</span>
         <span class="price">${plan.rub} ₽</span>
     </button>`;
 }
@@ -2344,12 +2358,6 @@ function bindView() {
         const report = planReport(selectedPlanDay());
         report.mood = button.dataset.planMood;
         savePlanReports();
-        render();
-    }));
-    document.querySelectorAll("[data-battle-opponent]").forEach(button => button.addEventListener("click", () => {
-        state.battleOpponent = button.dataset.battleOpponent;
-        state.battleResult = null;
-        saveBattleState();
         render();
     }));
     document.querySelector("[data-toggle-nutrition-history]")?.addEventListener("click", async () => {
@@ -3753,8 +3761,8 @@ function selectedBattleOpponent() {
 }
 
 function battleOwnScore() {
+    if (state.battleResult?.ownScore) return Math.max(1, Math.min(100, Number(state.battleResult.ownScore)));
     if (state.analysis?.score) return Math.max(1, Math.min(100, Number(state.analysis.score)));
-    if (state.files.front || state.previews.front) return 68;
     return 0;
 }
 
@@ -3764,10 +3772,9 @@ async function runBattle() {
         toast("Сначала добавь фото лица в разделе анализа.");
         return;
     }
-    const opponent = selectedBattleOpponent();
     const form = new FormData();
     appendImageToForm(form, "photo", state.files.front, state.previews.front);
-    form.append("opponentId", opponent.id);
+    state.battleResult = null;
     state.busy.battle = true;
     render();
     try {
@@ -3778,6 +3785,8 @@ async function runBattle() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Не удалось сравнить фото");
+        const opponent = battleOpponents.find(item => item.id === data.opponentId);
+        if (!opponent) throw new Error("Не удалось определить выпавшего соперника");
         const delta = Number(data.ownScore) - Number(data.opponentScore);
         const result = data.result;
         const eloDelta = result === "win"
@@ -3808,11 +3817,13 @@ function battleElo() {
 }
 
 function battleRank(elo) {
-    if (elo >= 1080) return "Магнит";
-    if (elo >= 1000) return "Фотогеник";
-    if (elo >= 920) return "Контур";
-    if (elo >= 840) return "База";
-    return "Новичок";
+    if (elo >= 1240) return "Chad";
+    if (elo >= 1160) return "Chadlite";
+    if (elo >= 1060) return "HTN";
+    if (elo >= 960) return "MTN";
+    if (elo >= 880) return "LTN";
+    if (elo >= 800) return "Саб 5";
+    return "Саб 3";
 }
 
 function battleAdvice(result, delta) {
@@ -3824,7 +3835,6 @@ function battleAdvice(result, delta) {
 function saveBattleState() {
     if (!state.boot?.user) return;
     localStorage.setItem(storageKey("battle"), JSON.stringify({
-        opponent: state.battleOpponent,
         history: state.battleHistory
     }));
 }

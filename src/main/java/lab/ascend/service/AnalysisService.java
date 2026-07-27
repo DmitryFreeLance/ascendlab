@@ -131,12 +131,12 @@ public class AnalysisService {
         }
     }
 
-    private static int calibratedScore(JsonNode report, int imageCount) {
+    static int calibratedScore(JsonNode report, int imageCount) {
         List<Integer> values = new ArrayList<>();
         report.path("metrics").forEach(metric -> {
             if (metric.has("value")) values.add(clamp(metric.path("value").asInt(), 0, 100));
         });
-        if (values.size() < 4) {
+        if (values.size() < 3) {
             throw new IllegalStateException("Недостаточно видимых метрик для честной оценки.");
         }
         values.sort(Comparator.naturalOrder());
