@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lab.ascend.domain.UserProfile;
 import lab.ascend.repo.AnalysisRepository;
+import lab.ascend.repo.BattleProfileRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -19,15 +20,18 @@ public class AnalysisService {
     private final AnalysisRepository reports;
     private final ObjectMapper objectMapper;
     private final FaceAnalysisAccessService faceAccess;
+    private final BattleProfileRepository battleProfiles;
 
     public AnalysisService(AiService ai,
                            AnalysisRepository reports,
                            ObjectMapper objectMapper,
-                           FaceAnalysisAccessService faceAccess) {
+                           FaceAnalysisAccessService faceAccess,
+                           BattleProfileRepository battleProfiles) {
         this.ai = ai;
         this.reports = reports;
         this.objectMapper = objectMapper;
         this.faceAccess = faceAccess;
+        this.battleProfiles = battleProfiles;
     }
 
     public Map<String, Object> analyze(UserProfile user, List<UploadedImage> images, boolean pro) {
@@ -58,6 +62,16 @@ public class AnalysisService {
                 throw new IllegalStateException("Оплаченная оценка уже использована");
             }
             reports.save(user.telegramId(), score, objectMapper.writeValueAsString(report), pro);
+            UploadedImage battlePhoto = images.stream()
+                    .filter(image -> image.bytes().length > 0)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Не найдено фото для профиля MogBattle"));
+            battleProfiles.upsertFromFaceAnalysis(
+                    user,
+                    score,
+                    battlePhoto.contentType(),
+                    battlePhoto.bytes()
+            );
             return pro ? report : limitedReport(report);
         } catch (IllegalStateException ex) {
             throw ex;

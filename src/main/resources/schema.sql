@@ -52,6 +52,20 @@ CREATE TABLE IF NOT EXISTS analysis_reports (
 
 ALTER TABLE analysis_reports ADD COLUMN IF NOT EXISTS community_eligible BOOLEAN DEFAULT FALSE NOT NULL;
 
+CREATE TABLE IF NOT EXISTS battle_profiles (
+    telegram_id BIGINT PRIMARY KEY,
+    public_id VARCHAR(64) NOT NULL UNIQUE,
+    display_name VARCHAR(255) NOT NULL,
+    score INT NOT NULL,
+    photo_content_type VARCHAR(64) NOT NULL,
+    photo_bytes BLOB NOT NULL,
+    score_source VARCHAR(32) NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_battle_profiles_public_id ON battle_profiles(public_id);
+
 CREATE TABLE IF NOT EXISTS face_analysis_wallet (
     telegram_id BIGINT PRIMARY KEY,
     credits INT DEFAULT 0 NOT NULL,

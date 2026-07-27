@@ -1253,7 +1253,10 @@ function analysisMetric(item, interactive = false) {
             <strong>${escapeHtml(item.name)}</strong>
             <span>${value}%${interactive ? ` <i data-lucide="chevron-right"></i>` : ""}</span>
         </div>
-        <div class="track live-track"><span class="fill" style="--value:${value};width:${value}%"></span></div>
+        <div class="bounded-track">
+            <div class="track live-track"><span class="fill" style="--value:${value};width:${value}%"></span></div>
+            <div class="track-limits"><span>0</span><span>100</span></div>
+        </div>
         <p class="muted">${escapeHtml(cleanPublicText(item.hint || ""))}</p>
     </article>`;
 }
@@ -1870,8 +1873,8 @@ function renderBattle() {
         </div>
         <div class="battle-random-draw">
             <span class="icon-shell"><i data-lucide="shuffle"></i></span>
-            <div><strong>Случайный соперник</strong><small>Профиль определится только после запуска баттла</small></div>
-            <span class="battle-draw-status">${state.busy.battle ? "поиск…" : "рандом"}</span>
+            <div><strong>Случайный соперник</strong><small>${Number(state.boot?.battlePool?.community || 0)} реальных участников · свой профиль исключён</small></div>
+            <span class="battle-draw-status">${state.busy.battle ? "поиск…" : `${Number(state.boot?.battlePool?.available || 3)} в пуле`}</span>
         </div>
         <div class="battle-stage">
             <div class="fighter-card">
@@ -1901,10 +1904,11 @@ function renderBattleResult() {
         <p class="eyebrow">${result.result === "win" ? "Победа" : result.result === "tie" ? "Ничья" : "Поражение"}</p>
         <h2>${result.ownScore} : ${result.opponentScore}</h2>
         <div class="battle-scoreline">
-            <span><b>Твоё фото</b><i style="width:${result.ownScore}%"></i></span>
-            <span><b>Фото соперника</b><i style="width:${result.opponentScore}%"></i></span>
+            <span><b>Ты</b><span class="battle-scale"><i style="width:${result.ownScore}%"></i><small><em>0</em><em>100</em></small></span></span>
+            <span><b>Соперник</b><span class="battle-scale"><i style="width:${result.opponentScore}%"></i><small><em>0</em><em>100</em></small></span></span>
         </div>
         <p class="muted">${escapeHtml(battleLabeledText(result.advice))}</p>
+        <div class="battle-score-method"><i data-lucide="scan-face"></i><span>Баллы за черты лица и гармонию. Свет и ракурс показываются отдельно и не дают бонус к внешности.</span></div>
         ${result.focus?.length ? `<div class="battle-focus">${result.focus.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
     </div>`;
 }
@@ -2151,7 +2155,7 @@ function planTitle(code) {
 
 function metric(name, value, hint = "") {
     const safeValue = Math.max(0, Math.min(100, Number(value) || 0));
-    return `<div class="metric-row"><strong>${escapeHtml(name)}</strong><div class="track"><span class="fill" style="width:${safeValue}%"></span></div><span>${escapeHtml(String(hint || safeValue))}</span></div>`;
+    return `<div class="metric-row"><strong>${escapeHtml(name)}</strong><div class="bounded-track"><div class="track"><span class="fill" style="width:${safeValue}%"></span></div><div class="track-limits"><span>0</span><span>100</span></div></div><span>${escapeHtml(String(hint || safeValue))}</span></div>`;
 }
 
 function nutritionTargets(data = state.nutrition || {}) {
@@ -3308,9 +3312,8 @@ function loadLocalState() {
     state.selectedPlanDay = defaultPlanDay();
     const battle = readJson(storageKey("battle"), {});
     state.battleOpponent = battleOpponents.some(item => item.id === battle.opponent) ? battle.opponent : state.battleOpponent;
-    const battleNames = new Set(battleOpponents.map(item => item.name));
     state.battleHistory = Array.isArray(battle.history)
-            ? battle.history.filter(item => item.method === "ai-v2" && battleNames.has(item.name)).slice(0, 20)
+            ? battle.history.filter(item => item.method === "community-pool-v4" && item.name && item.image).slice(0, 20)
             : [];
 }
 
@@ -3820,6 +3823,14 @@ function renderPlanReportList() {
 }
 
 function selectedBattleOpponent() {
+    if (state.battleResult?.image) {
+        return {
+            id: state.battleResult.opponentId,
+            name: state.battleResult.name,
+            tier: state.battleResult.tier || "участник BodyLab",
+            image: state.battleResult.image
+        };
+    }
     const id = state.battleResult?.opponentId || state.battleOpponent;
     const opponent = battleOpponents.find(item => item.id === id);
     if (opponent) return opponent;
@@ -3852,8 +3863,16 @@ async function runBattle() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "Не удалось сравнить фото");
-        const opponent = battleOpponents.find(item => item.id === data.opponentId);
-        if (!opponent) throw new Error("Не удалось определить выпавшего соперника");
+        const controlOpponent = battleOpponents.find(item => item.id === data.opponentId);
+        const opponent = {
+            id: data.opponentId,
+            name: data.name || controlOpponent?.name || "Участник BodyLab",
+            tier: data.tier || controlOpponent?.tier || "участник BodyLab",
+            image: data.image
+                ? (data.image.startsWith("/api/") ? apiPath(data.image) : data.image)
+                : controlOpponent?.image
+        };
+        if (!opponent.image) throw new Error("Не удалось загрузить карточку выпавшего соперника");
         const delta = Number(data.ownScore) - Number(data.opponentScore);
         const result = data.result;
         const eloDelta = result === "win"
@@ -3863,7 +3882,7 @@ async function runBattle() {
             ...data,
             image: opponent.image,
             tier: opponent.tier,
-            method: "ai-v2",
+            method: "community-pool-v4",
             eloDelta,
             advice: data.summary || battleAdvice(result, delta)
         };

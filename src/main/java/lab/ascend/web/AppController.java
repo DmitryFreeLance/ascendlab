@@ -3,6 +3,7 @@ package lab.ascend.web;
 import lab.ascend.config.AppProperties;
 import lab.ascend.domain.UserProfile;
 import lab.ascend.repo.AnalysisRepository;
+import lab.ascend.repo.BattleProfileRepository;
 import lab.ascend.repo.UserRepository;
 import lab.ascend.service.AdminService;
 import lab.ascend.service.ChatUsageService;
@@ -35,6 +36,7 @@ public class AppController {
     private final AnalysisRepository analyses;
     private final AppProperties properties;
     private final FaceAnalysisAccessService faceAccess;
+    private final BattleProfileRepository battleProfiles;
 
     public AppController(CurrentUserService currentUser,
                          SubscriptionService subscriptions,
@@ -45,7 +47,8 @@ public class AppController {
                          UserRepository users,
                          AnalysisRepository analyses,
                          AppProperties properties,
-                         FaceAnalysisAccessService faceAccess) {
+                         FaceAnalysisAccessService faceAccess,
+                         BattleProfileRepository battleProfiles) {
         this.currentUser = currentUser;
         this.subscriptions = subscriptions;
         this.payments = payments;
@@ -56,11 +59,13 @@ public class AppController {
         this.analyses = analyses;
         this.properties = properties;
         this.faceAccess = faceAccess;
+        this.battleProfiles = battleProfiles;
     }
 
     @GetMapping("/bootstrap")
     public Map<String, Object> bootstrap(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
         UserProfile user = currentUser.require(initData);
+        int battleCommunity = battleProfiles.countOpponents(user.telegramId());
         return Map.ofEntries(
                 Map.entry("user", user),
                 Map.entry("onboardingSeen", users.onboardingSeen(user.telegramId())),
@@ -70,6 +75,10 @@ public class AppController {
                 Map.entry("hasFaceAnalysis", analyses.existsByTelegramId(user.telegramId())),
                 Map.entry("faceAnalysis", faceAccess.status(user.telegramId())),
                 Map.entry("communityProgress", analyses.communityProgress()),
+                Map.entry("battlePool", Map.of(
+                        "community", battleCommunity,
+                        "available", battleCommunity + 3
+                )),
                 Map.entry("plans", plans.all()),
                 Map.entry("payments", payments.paymentConfig()),
                 Map.entry("features", features()),
