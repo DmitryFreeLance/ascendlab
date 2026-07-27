@@ -82,7 +82,7 @@ public class BattleController {
         response.put("name", opponent.name());
         response.put("ownScore", ownScore);
         response.put("opponentScore", opponentScore);
-        response.put("summary", report.path("summary").asText(""));
+        response.put("summary", labeledSummary(report.path("summary").asText("")));
         response.put("ownStrengths", textList(report.path("ownStrengths")));
         response.put("opponentStrengths", textList(report.path("opponentStrengths")));
         response.put("focus", textList(report.path("focus")));
@@ -105,6 +105,16 @@ public class BattleController {
 
     private static int clamp(int value) {
         return Math.max(0, Math.min(100, value));
+    }
+
+    static String labeledSummary(String value) {
+        return value
+                .replaceAll("(?iu)на первом фото", "на твоём фото")
+                .replaceAll("(?iu)на втором фото", "на фото соперника")
+                .replaceAll("(?iu)первое фото", "Твоё фото")
+                .replaceAll("(?iu)второе фото", "Фото соперника")
+                .replaceAll("(?iu)первый кадр", "Твоё фото")
+                .replaceAll("(?iu)второй кадр", "Фото соперника");
     }
 
     private static int calibratedScore(JsonNode metrics, int modelScore, int quality) {

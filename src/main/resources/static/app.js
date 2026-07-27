@@ -46,6 +46,7 @@ const state = {
     selectedGuide: null,
     selectedGuideCategory: "",
     selectedMetric: "",
+    metricReturnId: "",
     guideTrack: "soft",
     paymentMode: "subscription",
     analysisStep: 1,
@@ -1044,7 +1045,11 @@ function renderAnalysis() {
     const result = state.analysis;
     if (state.busy.analysis) return renderFaceAnalysisProgress();
     if (state.selectedMetric && isPro() && result) return renderAnalysisMetricDetail(result, state.selectedMetric);
-    if (!result) return renderFaceAnalysisWizard();
+    if (!result) {
+        return hasCompletedFaceAnalysis()
+            ? renderRepeatFaceAnalysis()
+            : renderFaceAnalysisWizard();
+    }
     const remaining = analysisCooldownRemaining("face");
     const canRun = canRunFaceAnalysis();
     const blockedByAccess = !hasFaceAnalysisEntitlement();
@@ -1073,6 +1078,31 @@ function renderAnalysis() {
         ${isPro()
             ? `<button class="button secondary" data-view="plan">Открыть план</button>`
             : `<button class="button primary" data-action="open-payment">Получить доступ</button>`}
+    </section>`;
+}
+
+function renderRepeatFaceAnalysis() {
+    const remaining = analysisCooldownRemaining("face");
+    const entitled = hasFaceAnalysisEntitlement();
+    const offer = faceAnalysisOffer();
+    const canRun = canRunFaceAnalysis();
+    const buttonLabel = !entitled
+        ? `Новая оценка · ${offer?.rub || 99} ₽`
+        : remaining > 0 && isPro()
+            ? `Обновление через ${formatDuration(remaining)}`
+            : "Запустить новый анализ";
+    return `<section class="section-panel repeat-face-analysis">
+        <p class="eyebrow">Анализ лица</p>
+        <h1>Новый скан</h1>
+        <p class="muted">Онбординг уже пройден. Обнови анфас и, если хочешь повысить точность, добавь профиль.</p>
+        <div class="upload-grid">
+            ${uploadTile("front", "Анфас", "лицо прямо · хороший свет")}
+            ${uploadTile("side", "Профиль", "по желанию")}
+        </div>
+        <button class="button primary" data-action="${entitled ? "run-analysis" : "open-face-payment"}" ${entitled && !canRun ? "disabled" : ""}>
+            <i data-lucide="${entitled ? "scan-line" : "scan-face"}"></i>
+            <span ${entitled && remaining > 0 && isPro() ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>
+        </button>
     </section>`;
 }
 
@@ -1871,10 +1901,10 @@ function renderBattleResult() {
         <p class="eyebrow">${result.result === "win" ? "Победа" : result.result === "tie" ? "Ничья" : "Поражение"}</p>
         <h2>${result.ownScore} : ${result.opponentScore}</h2>
         <div class="battle-scoreline">
-            <span><b>Ты</b><i style="width:${result.ownScore}%"></i></span>
-            <span><b>${escapeHtml(result.name)}</b><i style="width:${result.opponentScore}%"></i></span>
+            <span><b>Твоё фото</b><i style="width:${result.ownScore}%"></i></span>
+            <span><b>Фото соперника</b><i style="width:${result.opponentScore}%"></i></span>
         </div>
-        <p class="muted">${escapeHtml(result.advice)}</p>
+        <p class="muted">${escapeHtml(battleLabeledText(result.advice))}</p>
         ${result.focus?.length ? `<div class="battle-focus">${result.focus.map(item => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
     </div>`;
 }
@@ -2306,6 +2336,7 @@ function bindView() {
     document.querySelectorAll("[data-analysis-metric]").forEach(card => {
         const open = () => {
             state.selectedMetric = card.dataset.analysisMetric;
+            state.metricReturnId = card.dataset.analysisMetric;
             render();
             resetScroll();
         };
@@ -2398,9 +2429,7 @@ async function handleAction(event) {
         setView("analysis");
     }
     if (action === "back-analysis-metrics") {
-        state.selectedMetric = "";
-        render();
-        resetScroll();
+        returnToAnalysisMetrics();
     }
     if (action === "analysis-next") {
         state.analysisStep = Math.min(3, Math.max(1, Number(state.analysisStep) || 1) + 1);
@@ -2494,6 +2523,7 @@ function finishOnboarding() {
 }
 
 function setView(view, options = {}) {
+    const enteringAnalysis = view === "analysis" && state.view !== "analysis";
     if (state.view === "gpt" && view !== "gpt") {
         activeChatTyper?.flush();
     }
@@ -2502,6 +2532,7 @@ function setView(view, options = {}) {
         state.viewHistory = state.viewHistory.slice(-20);
     }
     state.view = view;
+    if (enteringAnalysis && !state.busy.analysis) state.analysisStep = 1;
     if (view !== "analysis") state.selectedMetric = "";
     if (view !== "academy") {
         state.selectedGuide = null;
@@ -2520,9 +2551,7 @@ function navigateBack() {
         activeChatTyper?.flush();
     }
     if (state.view === "analysis" && state.selectedMetric) {
-        state.selectedMetric = "";
-        render();
-        resetScroll();
+        returnToAnalysisMetrics();
         return;
     }
     if (state.view === "academy" && state.selectedGuide) {
@@ -2571,6 +2600,23 @@ function syncTopbarNavigation() {
 
 function resetScroll() {
     requestAnimationFrame(() => window.scrollTo(0, 0));
+}
+
+function returnToAnalysisMetrics() {
+    const metricId = state.selectedMetric || state.metricReturnId;
+    state.selectedMetric = "";
+    render();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        const card = Array.from(document.querySelectorAll("[data-analysis-metric]"))
+                .find(node => node.dataset.analysisMetric === metricId);
+        if (!card) return;
+        const topbar = document.querySelector(".topbar");
+        const offset = Math.max(88, Number(topbar?.offsetHeight || 0) + 14);
+        const top = card.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+        card.classList.add("return-highlight");
+        window.setTimeout(() => card.classList.remove("return-highlight"), 900);
+    }));
 }
 
 async function completeOnboardingRemote() {
@@ -2627,6 +2673,7 @@ async function runAnalysis() {
         data.comparison = scanComparison(previous, data, "face");
         state.analysis = data;
         if (state.boot) state.boot.hasFaceAnalysis = true;
+        localStorage.setItem(storageKey("face-flow-seen"), "1");
         if (!isPro() && state.boot?.faceAnalysis) {
             state.boot.faceAnalysis.credits = Math.max(0, Number(state.boot.faceAnalysis.credits || 0) - 1);
             state.boot.faceAnalysis.introAvailable = false;
@@ -2643,7 +2690,7 @@ async function runAnalysis() {
         toast(error.message);
     } finally {
         state.busy.analysis = false;
-        render();
+        if (state.view === "analysis") render();
     }
 }
 
@@ -3478,7 +3525,12 @@ function renderPlanDayRail(day, today) {
 function renderPlanToolShelf(day, canEdit) {
     const tools = activePlanTools();
     if (!tools.length) return "";
-    return `<div class="plan-tool-shelf">${tools.map(id => {
+    return `<section class="plan-tools-block">
+        <div class="plan-tools-head">
+            <div><p class="eyebrow">Подключённые функции</p><h3>Работают в маршруте</h3></div>
+            <span>${tools.length}</span>
+        </div>
+        <div class="plan-tool-shelf">${tools.map(id => {
         if (id === "water") return waterTrackerHtml("plan");
         if (id === "body") {
             const workout = bodyWorkoutForPlanDay(day);
@@ -3492,10 +3544,11 @@ function renderPlanToolShelf(day, canEdit) {
         if (!tool) return "";
         return `<article class="plan-tool-card">
             <span class="icon-shell"><i data-lucide="${tool.icon}"></i></span>
-            <div><strong>${escapeHtml(tool.title)}</strong><small>${escapeHtml(tool.tasks?.[0] || "Фокус закреплён")}</small></div>
+            <div><strong>${escapeHtml(tool.title)}</strong><small>Сегодня: ${escapeHtml(planToolTask(id, day))}</small></div>
             <button class="icon-button ghost" data-action="toggle-plan-tool" data-tool-id="${id}" aria-label="Убрать из плана"><i data-lucide="check"></i></button>
         </article>`;
-    }).join("")}</div>`;
+    }).join("")}</div>
+    </section>`;
 }
 
 function renderPlanNutritionTargets() {
@@ -3585,7 +3638,21 @@ function planReport(day) {
 function planTasksForReport(day, report) {
     const base = planPhase(day).tasks;
     const extra = Array.isArray(report?.extraTasks) ? report.extraTasks : [];
-    return [...base, ...extra];
+    const toolTasks = activePlanTools()
+            .filter(id => id !== "body" && id !== "water" && toolWorkspaces[id])
+            .map(id => `${planToolTitle(id)}: ${planToolTask(id, day)}`);
+    return [...new Set([...base, ...toolTasks, ...extra])];
+}
+
+function planToolTask(id, day = currentPlanDay()) {
+    const tool = toolWorkspaces[id];
+    if (!tool) return "Фокус закреплён";
+    const analyzedTasks = state.toolReports?.[id]?.tasks;
+    const tasks = Array.isArray(analyzedTasks) && analyzedTasks.length
+            ? analyzedTasks
+            : Array.isArray(tool.tasks) ? tool.tasks : [];
+    if (!tasks.length) return "Повтори ключевое действие и отметь результат.";
+    return cleanPublicText(tasks[(Math.max(1, Number(day) || 1) - 1) % tasks.length]);
 }
 
 function togglePlanTask(index, checked) {
@@ -3832,6 +3899,16 @@ function battleAdvice(result, delta) {
     return `Разрыв ${Math.abs(delta)} пунктов. Быстрый фокус: кожа, контур волос, силуэт, посадка одежды и более сильное фото.`;
 }
 
+function battleLabeledText(text) {
+    return String(text || "")
+            .replace(/на первом фото/giu, "на твоём фото")
+            .replace(/на втором фото/giu, "на фото соперника")
+            .replace(/первое фото/giu, "Твоё фото")
+            .replace(/второе фото/giu, "Фото соперника")
+            .replace(/первый кадр/giu, "Твоё фото")
+            .replace(/второй кадр/giu, "Фото соперника");
+}
+
 function saveBattleState() {
     if (!state.boot?.user) return;
     localStorage.setItem(storageKey("battle"), JSON.stringify({
@@ -4057,6 +4134,14 @@ function isStyleMetric(name) {
 
 function hasFaceAnalysisEntitlement() {
     return isPro() || Number(state.boot?.faceAnalysis?.credits || 0) > 0;
+}
+
+function hasCompletedFaceAnalysis() {
+    return Boolean(
+        state.analysis
+        || state.boot?.hasFaceAnalysis
+        || localStorage.getItem(storageKey("face-flow-seen")) === "1"
+    );
 }
 
 function featureCooldownRemaining(id) {
