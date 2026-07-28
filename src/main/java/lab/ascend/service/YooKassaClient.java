@@ -28,23 +28,7 @@ public class YooKassaClient {
             throw new IllegalStateException("YooKassa credentials are not configured");
         }
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("amount", Map.of(
-                "value", String.format(java.util.Locale.US, "%.2f", (double) plan.rub()),
-                "currency", "RUB"
-        ));
-        body.put("capture", true);
-        body.put("payment_method_data", Map.of("type", "bank_card"));
-        body.put("confirmation", Map.of(
-                "type", "redirect",
-                "return_url", properties.miniAppUrl() + "?payment=" + paymentId
-        ));
-        body.put("description", trimDescription("BodyLab - " + plan.title()));
-        body.put("metadata", Map.of(
-                "paymentId", paymentId,
-                "telegramId", String.valueOf(telegramId),
-                "planCode", plan.code()
-        ));
+        Map<String, Object> body = paymentRequest(telegramId, plan, paymentId);
 
         JsonNode response = restClient.post()
                 .uri(apiUrl() + "/payments")
@@ -59,6 +43,26 @@ public class YooKassaClient {
             throw new IllegalStateException("YooKassa API returned an invalid response: " + response);
         }
         return toPayment(response);
+    }
+
+    Map<String, Object> paymentRequest(long telegramId, PlanOffer plan, String paymentId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount", Map.of(
+                "value", String.format(java.util.Locale.US, "%.2f", (double) plan.rub()),
+                "currency", "RUB"
+        ));
+        body.put("capture", true);
+        body.put("confirmation", Map.of(
+                "type", "redirect",
+                "return_url", properties.miniAppUrl() + "?payment=" + paymentId
+        ));
+        body.put("description", trimDescription("BodyLab - " + plan.title()));
+        body.put("metadata", Map.of(
+                "paymentId", paymentId,
+                "telegramId", String.valueOf(telegramId),
+                "planCode", plan.code()
+        ));
+        return body;
     }
 
     public YooKassaPayment getPayment(String yookassaPaymentId) {

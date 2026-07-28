@@ -174,9 +174,13 @@ public class PaymentService {
     }
 
     private PlanOffer purchasableOffer(long telegramId, String code) {
+        if (FaceAnalysisAccessService.STANDARD_PRODUCT.equalsIgnoreCase(code)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Разовая оценка доступна только как первая покупка");
+        }
         if (FaceAnalysisAccessService.FIRST_PRODUCT.equalsIgnoreCase(code) && !faceAccess.introAvailable(telegramId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Скидка на первую оценку уже использована. Доступна оценка за 99 ₽.");
+                    "Первая оценка уже недоступна. Выбери тариф BodyPro.");
         }
         return plans.get(code);
     }

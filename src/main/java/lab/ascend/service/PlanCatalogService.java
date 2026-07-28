@@ -39,8 +39,8 @@ public class PlanCatalogService {
                 "Итоговая оценка без детальной карты метрик",
                 0,
                 49,
-                25,
-                new BigDecimal("0.60"),
+                24,
+                new BigDecimal("0.70"),
                 "-50%"
         )
                 : new PlanOffer(

@@ -144,12 +144,12 @@ https://your-domain.example/api/payments/crypto/webhook/<CRYPTO_PAY_WEBHOOK_SECR
 
 The service verifies `crypto-pay-api-signature` with HMAC-SHA-256 before activating access.
 
-## YooKassa Cards
+## YooKassa Payments
 
-Card payments are implemented through YooKassa API:
+Payments are implemented through YooKassa API using the Smart Payment flow:
 
 1. The Mini App calls `POST /api/payments/card`.
-2. The backend creates a YooKassa payment with `capture=true`, `payment_method_data.type=bank_card`, redirect confirmation, and metadata:
+2. The backend creates a YooKassa payment with `capture=true`, redirect confirmation, and metadata. It intentionally omits `payment_method_data` so the YooKassa form shows every payment method enabled for the ShopID:
 
 ```json
 {

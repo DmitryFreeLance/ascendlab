@@ -57,6 +57,18 @@ public class PaymentRepository {
                 paymentId);
     }
 
+    public boolean hasPaidPurchase(long telegramId) {
+        Integer count = jdbc.queryForObject("""
+                        SELECT COUNT(*)
+                        FROM payments
+                        WHERE telegram_id = ? AND status = ?
+                        """,
+                Integer.class,
+                telegramId,
+                PaymentStatus.PAID.name());
+        return count != null && count > 0;
+    }
+
     public record PaymentRecord(String id, long telegramId, String planCode, String provider, String status, String externalId) {
     }
 

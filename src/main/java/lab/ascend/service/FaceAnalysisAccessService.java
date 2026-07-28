@@ -3,8 +3,10 @@ package lab.ascend.service;
 import lab.ascend.domain.PlanOffer;
 import lab.ascend.repo.AnalysisRepository;
 import lab.ascend.repo.FaceAnalysisAccessRepository;
+import lab.ascend.repo.PaymentRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Service
@@ -14,13 +16,16 @@ public class FaceAnalysisAccessService {
 
     private final FaceAnalysisAccessRepository access;
     private final AnalysisRepository reports;
+    private final PaymentRepository payments;
     private final PlanCatalogService plans;
 
     public FaceAnalysisAccessService(FaceAnalysisAccessRepository access,
                                      AnalysisRepository reports,
+                                     PaymentRepository payments,
                                      PlanCatalogService plans) {
         this.access = access;
         this.reports = reports;
+        this.payments = payments;
         this.plans = plans;
     }
 
@@ -45,7 +50,9 @@ public class FaceAnalysisAccessService {
 
     public boolean introAvailable(long telegramId) {
         FaceAnalysisAccessRepository.Wallet wallet = access.status(telegramId);
-        return !wallet.introUsed() && !reports.existsByTelegramId(telegramId);
+        return !wallet.introUsed()
+                && !reports.existsByTelegramId(telegramId)
+                && !payments.hasPaidPurchase(telegramId);
     }
 
     public boolean consume(long telegramId) {
@@ -55,11 +62,13 @@ public class FaceAnalysisAccessService {
     public Map<String, Object> status(long telegramId) {
         FaceAnalysisAccessRepository.Wallet wallet = access.status(telegramId);
         boolean introAvailable = introAvailable(telegramId);
-        PlanOffer offer = plans.faceAnalysisOffer(introAvailable);
-        return Map.of(
-                "credits", wallet.credits(),
-                "introAvailable", introAvailable,
-                "offer", offer
-        );
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("credits", wallet.credits());
+        status.put("introAvailable", introAvailable);
+        if (introAvailable) {
+            PlanOffer offer = plans.faceAnalysisOffer(true);
+            status.put("offer", offer);
+        }
+        return Map.copyOf(status);
     }
 }

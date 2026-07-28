@@ -923,7 +923,7 @@ function renderDashboard() {
     </section>` : ""}
     ${renderCommunityProgress()}
     ${active ? "" : `<section class="section-panel">
-        <p class="eyebrow">Отдельная оценка</p>
+        ${canPurchaseFirstFaceAnalysis() ? `<p class="eyebrow">Отдельная оценка</p>
         <div class="standalone-face-offer">
             <span class="icon-shell"><i data-lucide="scan-face"></i></span>
             <div>
@@ -933,16 +933,11 @@ function renderDashboard() {
             <strong>${faceAnalysisOffer()?.rub || 49} ₽</strong>
             <button class="button secondary" data-action="${Number(state.boot.faceAnalysis?.credits || 0) > 0 ? "go-face-analysis" : "open-face-payment"}">${Number(state.boot.faceAnalysis?.credits || 0) > 0 ? "Запустить" : "Выбрать"}</button>
         </div>
-        <div class="offer-divider"><span>или полный доступ</span></div>
+        <div class="offer-divider"><span>или полный доступ</span></div>` : ""}
         <p class="eyebrow">Выбери тариф</p>
         <h2>Полный доступ ко всем функциям</h2>
         <div class="plan-list">${state.boot.plans.map(planCard).join("")}</div>
         <button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Получить доступ</button>
-        <button class="academy-entry-card" data-view="academy">
-            <span class="icon-shell"><i data-lucide="graduation-cap"></i></span>
-            <span><strong>Академия · гайды</strong><small>Бесплатно</small></span>
-            <em>Открыть</em>
-        </button>
     </section>`}
     <section class="section-panel">
         <p class="eyebrow">Быстрые функции</p>
@@ -1054,9 +1049,10 @@ function renderAnalysis() {
     const canRun = canRunFaceAnalysis();
     const blockedByAccess = !hasFaceAnalysisEntitlement();
     const offer = faceAnalysisOffer();
+    const canBuyFirstAssessment = canPurchaseFirstFaceAnalysis();
     const buttonBusy = state.busy.analysis;
     const buttonLabel = blockedByAccess
-        ? `Новая оценка · ${offer?.rub || 99} ₽`
+        ? canBuyFirstAssessment ? `Первая оценка · ${offer?.rub || 49} ₽` : "Получить BodyPro"
         : remaining > 0 && isPro() ? `Обновление через ${formatDuration(remaining)}` : "Оценить лицо";
     const buttonBusyLabel = "Сканирую...";
     return `<section class="section-panel">
@@ -1068,7 +1064,7 @@ function renderAnalysis() {
             ${uploadTile("front", "Анфас", "хорошее освещение")}
             ${uploadTile("side", "Профиль", "по желанию")}
         </div>
-        <button class="button primary ${buttonBusy ? "processing" : ""}" data-action="${blockedByAccess ? "open-face-payment" : "run-analysis"}" ${buttonBusy || (!blockedByAccess && !canRun) ? "disabled" : ""}>${buttonBusy ? buttonContent("Оценить лицо", buttonBusyLabel, "scan-line", true) : `<i data-lucide="${blockedByAccess ? "scan-face" : "scan-line"}"></i><span ${!blockedByAccess && remaining > 0 && isPro() ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>`}</button>
+        <button class="button primary ${buttonBusy ? "processing" : ""}" data-action="${blockedByAccess ? canBuyFirstAssessment ? "open-face-payment" : "open-payment" : "run-analysis"}" ${buttonBusy || (!blockedByAccess && !canRun) ? "disabled" : ""}>${buttonBusy ? buttonContent("Оценить лицо", buttonBusyLabel, "scan-line", true) : `<i data-lucide="${blockedByAccess ? "scan-face" : "scan-line"}"></i><span ${!blockedByAccess && remaining > 0 && isPro() ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>`}</button>
     </section>
     ${result ? renderAnalysisResult(result) : ""}
     <section class="section-panel">
@@ -1085,9 +1081,10 @@ function renderRepeatFaceAnalysis() {
     const remaining = analysisCooldownRemaining("face");
     const entitled = hasFaceAnalysisEntitlement();
     const offer = faceAnalysisOffer();
+    const canBuyFirstAssessment = canPurchaseFirstFaceAnalysis();
     const canRun = canRunFaceAnalysis();
     const buttonLabel = !entitled
-        ? `Новая оценка · ${offer?.rub || 99} ₽`
+        ? canBuyFirstAssessment ? `Первая оценка · ${offer?.rub || 49} ₽` : "Получить BodyPro"
         : remaining > 0 && isPro()
             ? `Обновление через ${formatDuration(remaining)}`
             : "Запустить новый анализ";
@@ -1099,7 +1096,7 @@ function renderRepeatFaceAnalysis() {
             ${uploadTile("front", "Анфас", "лицо прямо · хороший свет")}
             ${uploadTile("side", "Профиль", "по желанию")}
         </div>
-        <button class="button primary" data-action="${entitled ? "run-analysis" : "open-face-payment"}" ${entitled && !canRun ? "disabled" : ""}>
+        <button class="button primary" data-action="${entitled ? "run-analysis" : canBuyFirstAssessment ? "open-face-payment" : "open-payment"}" ${entitled && !canRun ? "disabled" : ""}>
             <i data-lucide="${entitled ? "scan-line" : "scan-face"}"></i>
             <span ${entitled && remaining > 0 && isPro() ? countdownAttrs(Date.now() + remaining, "Обновление через ") : ""}>${buttonLabel}</span>
         </button>
@@ -1153,6 +1150,7 @@ function renderFaceAnalysisStepReview() {
     const hasSide = Boolean(state.files.side || state.previews.side);
     const entitled = hasFaceAnalysisEntitlement();
     const offer = faceAnalysisOffer();
+    const canBuyFirstAssessment = canPurchaseFirstFaceAnalysis();
     return renderFaceStepShell(3, "Запуск", "Проверь фото и запусти анализ.", `
         <div class="face-review-grid">
             ${faceReviewPhoto("front", "Анфас")}
@@ -1164,7 +1162,7 @@ function renderFaceAnalysisStepReview() {
             <div><span>Режим</span><strong>${isPro() ? "Полная карта метрик" : "Оценка лица"}</strong></div>
         </div>
         <p class="muted">${isPro() ? "BodyPro откроет все метрики и действия по каждой зоне." : "В отдельную оценку входит итоговый балл. Детальная карта метрик доступна в BodyPro."}</p>
-        <button class="button primary" data-action="${entitled ? "run-analysis" : "open-face-payment"}">${entitled ? "Начать анализ" : `Оплатить оценку · ${offer?.rub || 49} ₽`}</button>
+        <button class="button primary" data-action="${entitled ? "run-analysis" : canBuyFirstAssessment ? "open-face-payment" : "open-payment"}">${entitled ? "Начать анализ" : canBuyFirstAssessment ? `Оплатить оценку · ${offer?.rub || 49} ₽` : "Получить BodyPro"}</button>
         <button class="button secondary" data-action="analysis-back"><i data-lucide="arrow-left"></i>Назад</button>
     `);
 }
@@ -3071,6 +3069,10 @@ function openPayment() {
 }
 
 function openFacePayment() {
+    if (!canPurchaseFirstFaceAnalysis()) {
+        openPayment();
+        return;
+    }
     state.paymentMode = "face";
     updatePaymentModal();
     openModal("paymentModal");
@@ -4121,6 +4123,10 @@ function selectedPlan() {
 
 function faceAnalysisOffer() {
     return state.boot?.faceAnalysis?.offer || null;
+}
+
+function canPurchaseFirstFaceAnalysis() {
+    return Boolean(state.boot?.faceAnalysis?.introAvailable && faceAnalysisOffer());
 }
 
 function currentPaymentOffer() {
