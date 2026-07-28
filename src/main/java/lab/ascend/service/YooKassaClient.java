@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -54,7 +56,7 @@ public class YooKassaClient {
         body.put("capture", true);
         body.put("confirmation", Map.of(
                 "type", "redirect",
-                "return_url", properties.miniAppUrl() + "?payment=" + paymentId
+                "return_url", paymentReturnUrl(paymentId)
         ));
         body.put("description", trimDescription("BodyLab - " + plan.title()));
         body.put("metadata", Map.of(
@@ -63,6 +65,21 @@ public class YooKassaClient {
                 "planCode", plan.code()
         ));
         return body;
+    }
+
+    private String paymentReturnUrl(String paymentId) {
+        StringBuilder url = new StringBuilder(properties.miniAppUrl())
+                .append("/payment-return.html?payment=")
+                .append(urlEncode(paymentId));
+        String botUsername = properties.telegram().botUsername();
+        if (botUsername != null && !botUsername.isBlank()) {
+            url.append("&bot=").append(urlEncode(botUsername.replaceFirst("^@", "")));
+        }
+        return url.toString();
+    }
+
+    private String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     public YooKassaPayment getPayment(String yookassaPaymentId) {

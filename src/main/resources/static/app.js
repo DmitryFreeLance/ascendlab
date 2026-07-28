@@ -793,7 +793,7 @@ async function bootstrap() {
     renderLoading();
     try {
         state.boot = await api("/api/bootstrap", { method: "GET", headers: { "Content-Type": "application/json" } });
-        const returnedPaymentId = new URLSearchParams(window.location.search).get("payment");
+        const returnedPaymentId = returnPaymentId();
         if (returnedPaymentId) {
             try {
                 await api(`/api/payments/${returnedPaymentId}/status`, { method: "GET" });
@@ -819,13 +819,14 @@ async function bootstrap() {
             completeOnboardingRemote();
         }
         const returnPlan = showReturnPaymentNotice();
+        const activatedPlan = returnPlan?.face ? null : (returnPlan || showNewSubscriptionNotice());
         render();
         startPlanClock();
         startCountdownClock();
         if (returnPlan?.face) {
             toast("Оплата принята. Оценка лица готова к запуску.");
-        } else if (returnPlan) {
-            openAccessModal(returnPlan);
+        } else if (activatedPlan) {
+            openAccessModal(activatedPlan);
         }
     } catch (error) {
         document.querySelector("#app").innerHTML = `<section class="section-panel"><h2>Не удалось запустить BodyLab</h2><p class="muted">${escapeHtml(error.message)}</p></section>`;
@@ -3192,7 +3193,7 @@ function setPaymentBusy(busy) {
 }
 
 function showReturnPaymentNotice() {
-    const paymentId = new URLSearchParams(window.location.search).get("payment");
+    const paymentId = returnPaymentId();
     if (!paymentId) return null;
     const key = `bodylab:payment-notice:${paymentId}`;
     if (sessionStorage.getItem(key)) return null;
@@ -3200,7 +3201,7 @@ function showReturnPaymentNotice() {
         state.view = "analysis";
         state.analysisStep = 3;
         sessionStorage.setItem(key, "1");
-        window.history.replaceState(null, "", window.location.pathname);
+        clearDirectPaymentParameter();
         return { face: true };
     }
     if (!state.boot?.subscription?.active) return null;
@@ -3208,8 +3209,55 @@ function showReturnPaymentNotice() {
     state.accessNotice = accessNoticeText(plan);
     state.view = "dashboard";
     sessionStorage.setItem(key, "1");
-    window.history.replaceState(null, "", window.location.pathname);
+    rememberSubscriptionCelebrated();
+    clearDirectPaymentParameter();
     return plan;
+}
+
+function showNewSubscriptionNotice() {
+    if (!state.boot?.subscription?.active) return null;
+    const celebrationId = subscriptionCelebrationId();
+    if (!celebrationId || localStorage.getItem(storageKey("celebrated-subscription")) === celebrationId) {
+        return null;
+    }
+    const plan = state.boot.plans.find(item => item.code === state.boot.subscription.planCode) || selectedPlan();
+    state.accessNotice = accessNoticeText(plan);
+    state.view = "dashboard";
+    rememberSubscriptionCelebrated();
+    return plan;
+}
+
+function subscriptionCelebrationId() {
+    const subscription = state.boot?.subscription;
+    if (!subscription?.active) return "";
+    return `${subscription.planCode || "bodypro"}:${subscription.activeUntil || "active"}`;
+}
+
+function rememberSubscriptionCelebrated() {
+    const celebrationId = subscriptionCelebrationId();
+    if (celebrationId) {
+        localStorage.setItem(storageKey("celebrated-subscription"), celebrationId);
+    }
+}
+
+function returnPaymentId() {
+    const query = new URLSearchParams(window.location.search);
+    const directPaymentId = query.get("payment");
+    if (directPaymentId) return directPaymentId;
+
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const startParam = tg?.initDataUnsafe?.start_param
+        || query.get("tgWebAppStartParam")
+        || hash.get("tgWebAppStartParam")
+        || "";
+    return startParam.startsWith("payment_") ? startParam.slice("payment_".length) : null;
+}
+
+function clearDirectPaymentParameter() {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("payment")) return;
+    url.searchParams.delete("payment");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function accessNoticeText(plan) {
@@ -3219,6 +3267,7 @@ function accessNoticeText(plan) {
 function showAccessUnlocked(plan) {
     state.busy.payment = false;
     state.accessNotice = accessNoticeText(plan);
+    rememberSubscriptionCelebrated();
     closeModals();
     state.view = "dashboard";
     renderNav();

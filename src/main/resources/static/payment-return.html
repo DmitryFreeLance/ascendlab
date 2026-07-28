@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#080a0f">
+    <title>Спасибо за платёж — BodyLab</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #080a0f;
+            color: #f5f7fb;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background:
+                    radial-gradient(circle at 50% 0%, rgba(192, 255, 79, 0.12), transparent 42%),
+                    linear-gradient(180deg, #111720 0%, #080a0f 70%);
+        }
+
+        main {
+            width: min(100%, 520px);
+            padding: 38px 28px;
+            text-align: center;
+            border: 1px solid rgba(116, 222, 255, 0.28);
+            border-radius: 32px;
+            background: rgba(18, 24, 34, 0.94);
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+        }
+
+        .mark {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 24px;
+            display: grid;
+            place-items: center;
+            border-radius: 24px;
+            background: #c0ff4f;
+            color: #0b0e13;
+            font-size: 34px;
+            font-weight: 900;
+        }
+
+        p {
+            margin: 0;
+        }
+
+        .eyebrow {
+            color: #c0ff4f;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 14px 0 12px;
+            font-size: clamp(30px, 8vw, 44px);
+            line-height: 1.05;
+        }
+
+        .message {
+            color: #aeb7c7;
+            font-size: 18px;
+            line-height: 1.55;
+        }
+
+        a {
+            min-height: 58px;
+            margin-top: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 14px 20px;
+            border-radius: 18px;
+            background: #c0ff4f;
+            color: #0b0e13;
+            font-size: 17px;
+            font-weight: 850;
+            text-decoration: none;
+        }
+
+        .hint {
+            margin-top: 16px;
+            color: #737e90;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <div class="mark" aria-hidden="true">✓</div>
+    <p class="eyebrow">Платёж принят</p>
+    <h1>Спасибо за платёж!</h1>
+    <p class="message">Чтобы продолжить, вернитесь в мини‑апп.</p>
+    <a id="openMiniApp" href="#" hidden>Вернуться в Telegram Mini App</a>
+    <p class="hint" id="returnHint">Пытаемся открыть Telegram автоматически…</p>
+</main>
+<script>
+    (() => {
+        const params = new URLSearchParams(window.location.search);
+        const paymentId = params.get("payment") || "";
+        const botUsername = (params.get("bot") || "").replace(/^@/, "");
+        const validPaymentId = /^[A-Za-z0-9_-]{1,128}$/.test(paymentId);
+        const validBotUsername = /^[A-Za-z0-9_]{5,32}$/.test(botUsername);
+        const button = document.getElementById("openMiniApp");
+        const hint = document.getElementById("returnHint");
+
+        if (!validPaymentId || !validBotUsername) {
+            hint.textContent = "Откройте BodyLab вручную через Telegram.";
+            return;
+        }
+
+        const miniAppUrl = `https://t.me/${botUsername}?startapp=${encodeURIComponent(`payment_${paymentId}`)}`;
+        button.href = miniAppUrl;
+        button.hidden = false;
+        window.setTimeout(() => {
+            window.location.replace(miniAppUrl);
+        }, 700);
+        window.setTimeout(() => {
+            hint.textContent = "Если Telegram не открылся, нажмите кнопку выше.";
+        }, 1800);
+    })();
+</script>
+</body>
+</html>
