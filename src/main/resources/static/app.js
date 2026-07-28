@@ -106,13 +106,13 @@ const battleOpponents = [
 const nav = [
     ["dashboard", "Профиль", "user-round"],
     ["features", "Все функции", "layout-grid"],
+    ["academy", "Академия · бесплатно", "graduation-cap"],
     ["battle", "MogBattle", "swords"],
     ["analysis", "Анализ лица", "scan-face"],
     ["body", "Body Max", "activity"],
     ["plan", "Персональный план", "calendar-days"],
     ["gpt", "BodyGPT", "brain"],
-    ["nutrition", "Питание", "utensils"],
-    ["academy", "Академия", "graduation-cap"]
+    ["nutrition", "Питание", "utensils"]
 ];
 
 const adminNavItem = ["admin", "Админка", "shield-check"];
@@ -940,7 +940,7 @@ function renderDashboard() {
         <button class="button primary" data-action="open-payment"><i data-lucide="unlock"></i>Получить доступ</button>
         <button class="academy-entry-card" data-view="academy">
             <span class="icon-shell"><i data-lucide="graduation-cap"></i></span>
-            <span><strong>Академия · гайды</strong><small>Можно открыть без BodyPro</small></span>
+            <span><strong>Академия · гайды</strong><small>Бесплатно</small></span>
             <em>Открыть</em>
         </button>
     </section>`}
@@ -1630,7 +1630,7 @@ function renderAcademy() {
         <p class="muted">Большие справочники с чеклистами и конкретными правилами: уход, волосы, фото, тело, стиль и осознанные решения.</p>
         ${!isPro() ? `<div class="academy-open-callout">
             <span class="icon-shell"><i data-lucide="book-open-check"></i></span>
-            <div><strong>Гайды доступны без BodyPro</strong><p>Академию можно открыть и начать изучать без подписки.</p></div>
+            <div><strong>Начать можно бесплатно</strong><p>Академию можно открыть и начать изучать без подписки.</p></div>
         </div>` : ""}
         <div class="segmented guide-track-tabs">
             <button class="${state.guideTrack === "soft" ? "active" : ""}" data-guide-track="soft">Softmaxxing</button>
@@ -1873,7 +1873,7 @@ function renderBattle() {
         </div>
         <div class="battle-random-draw">
             <span class="icon-shell"><i data-lucide="shuffle"></i></span>
-            <div><strong>Случайный соперник</strong><small>${Number(state.boot?.battlePool?.community || 0)} реальных участников · свой профиль исключён</small></div>
+            <div><strong>Случайный соперник</strong><small>Профиль определится после запуска баттла</small></div>
             <span class="battle-draw-status">${state.busy.battle ? "поиск…" : `${Number(state.boot?.battlePool?.available || 3)} в пуле`}</span>
         </div>
         <div class="battle-stage">
@@ -2245,7 +2245,7 @@ function featureCard(feature) {
         : "";
     return `<button class="feature-card ${hot ? "is-hot" : ""} ${academy ? "is-academy" : ""}" data-view="${viewForFeature(feature.id)}">
         <span class="icon-shell"><i data-lucide="${feature.icon}"></i></span>
-        <span><strong>${feature.title}</strong><small>${feature.subtitle}</small>${academy && !isPro() ? `<em class="feature-access-badge">без BodyPro</em>` : ""}${timer}</span>
+        <span><strong>${feature.title}</strong><small>${feature.subtitle}</small>${academy ? `<em class="feature-access-badge">Бесплатно</em>` : ""}${timer}</span>
     </button>`;
 }
 

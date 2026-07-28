@@ -67,6 +67,10 @@ YooKassa card payments:
 - `YOOKASSA_API_URL`
 - `YOOKASSA_WEBHOOK_SECRET`
 
+`YOOKASSA_WEBHOOK_SECRET` is not issued by YooKassa. Generate your own long
+random value (for example, `openssl rand -hex 32`) and use exactly the same
+value as the final URL segment.
+
 Webhook URL:
 
 ```text

@@ -90,7 +90,7 @@ public class PaymentController {
     }
 
     @PostMapping("/yookassa/webhook/{secret}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @ResponseStatus(HttpStatus.OK)
     public void yookassaWebhook(@PathVariable String secret, @RequestBody String rawBody) {
         if (!properties.payments().yookassaWebhookSecret().equals(secret)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);

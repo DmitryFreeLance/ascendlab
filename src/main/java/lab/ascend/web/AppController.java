@@ -113,6 +113,7 @@ public class AppController {
 
     private List<Map<String, String>> features() {
         return List.of(
+                feature("academy", "Академия", "Гайды · бесплатно", "graduation-cap"),
                 feature("face", "Анализ лица", "Оценка черт и зон роста", "scan-face"),
                 feature("skin", "Skincare", "Уход за кожей", "droplets"),
                 feature("hair", "Стрижка", "Подбор формы", "scissors"),
@@ -124,7 +125,6 @@ public class AppController {
                 feature("wardrobe", "Гардероб", "Силуэт и цвета", "shirt"),
                 feature("gpt", "BodyGPT", "Личный помощник", "brain"),
                 feature("food", "Питание", "Дневник КБЖУ", "utensils"),
-                feature("academy", "Академия", "Гайды", "graduation-cap"),
                 feature("looks", "Похож на", "Looks Like", "user-search"),
                 feature("battle", "MogBattle", "Битва внешности", "swords")
         );
