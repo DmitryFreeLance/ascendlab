@@ -22,6 +22,10 @@ public class ChatUsageService {
     }
 
     public ChatUsage status(long telegramId) {
+        return status(telegramId, false);
+    }
+
+    public ChatUsage status(long telegramId, boolean unlimited) {
         String dayKey = dayKey();
         Integer used = jdbc.queryForObject("""
                 SELECT COALESCE(MAX(message_count), 0)
@@ -29,11 +33,19 @@ public class ChatUsageService {
                 WHERE telegram_id = ? AND day_key = ?
                 """, Integer.class, telegramId, dayKey);
         int count = used == null ? 0 : used;
-        return new ChatUsage(DAILY_LIMIT, count, Math.max(0, DAILY_LIMIT - count), dayKey);
+        int remaining = unlimited ? Integer.MAX_VALUE : Math.max(0, DAILY_LIMIT - count);
+        return new ChatUsage(DAILY_LIMIT, count, remaining, dayKey, unlimited);
     }
 
     public ChatUsage reserve(long telegramId) {
-        ChatUsage current = status(telegramId);
+        return reserve(telegramId, false);
+    }
+
+    public ChatUsage reserve(long telegramId, boolean unlimited) {
+        ChatUsage current = status(telegramId, unlimited);
+        if (unlimited) {
+            return current;
+        }
         if (current.remaining() <= 0) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "Лимит BodyGPT на сегодня исчерпан: 100 сообщений. Новый лимит откроется завтра.");
@@ -56,6 +68,6 @@ public class ChatUsageService {
         return Instant.now().atZone(MOSCOW).minusHours(4).format(DAY_FORMAT);
     }
 
-    public record ChatUsage(int limit, int used, int remaining, String dayKey) {
+    public record ChatUsage(int limit, int used, int remaining, String dayKey, boolean unlimited) {
     }
 }

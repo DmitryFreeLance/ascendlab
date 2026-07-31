@@ -1556,7 +1556,7 @@ function renderGpt() {
         <div class="assistant-head">
             <span class="brand-mark">AI</span>
             <div><h3>BodyGPT</h3><p class="eyebrow" style="margin:0">${isPro() ? "личный помощник" : "на связи"}</p></div>
-            <span class="chat-quota ${usage.remaining <= 10 ? "low" : ""}">${usage.used}/${usage.limit}</span>
+            <span class="chat-quota ${!usage.unlimited && usage.remaining <= 10 ? "low" : ""}">${usage.unlimited ? "Без лимита" : `${usage.used}/${usage.limit}`}</span>
         </div>
         <div class="chat-list" id="chatList">${state.chat.map(chatMessageHtml).join("")}</div>
         <div class="chips">${["Что делать сегодня", "Отёки", "Питание", "План тренировки"].map(text => `<button class="chip" data-chat-chip="${text}">${text}</button>`).join("")}</div>
@@ -2817,7 +2817,7 @@ async function sendChat(text) {
     if (!message) return;
     blurActiveInput();
     const usage = chatUsageView();
-    if (isPro() && usage.remaining <= 0) {
+    if (isPro() && !usage.unlimited && usage.remaining <= 0) {
         toast("Лимит BodyGPT на сегодня исчерпан: 100 сообщений. Новый лимит откроется завтра.");
         return;
     }
@@ -2844,7 +2844,7 @@ async function sendChat(text) {
             const error = await response.json().catch(() => ({ message: "Ошибка чата" }));
             throw new Error(error.message);
         }
-        if (isPro()) {
+        if (isPro() && !usage.unlimited) {
             state.chatUsage.used = Math.min(usage.limit, Number(state.chatUsage.used || 0) + 1);
             state.chatUsage.remaining = Math.max(0, usage.limit - state.chatUsage.used);
             paintChatQuota();
@@ -4077,8 +4077,8 @@ function paintChatQuota() {
     const node = document.querySelector(".chat-quota");
     if (!node) return;
     const usage = chatUsageView();
-    node.textContent = `${usage.used}/${usage.limit}`;
-    node.classList.toggle("low", usage.remaining <= 10);
+    node.textContent = usage.unlimited ? "Без лимита" : `${usage.used}/${usage.limit}`;
+    node.classList.toggle("low", !usage.unlimited && usage.remaining <= 10);
 }
 
 function unlockChatComposer() {
@@ -4152,7 +4152,13 @@ function gptWelcomeText() {
 function chatUsageView() {
     const limit = Number(state.chatUsage?.limit || BODYGPT_DAILY_LIMIT);
     const used = Math.max(0, Number(state.chatUsage?.used || 0));
-    return { limit, used, remaining: Math.max(0, limit - used) };
+    const unlimited = Boolean(state.chatUsage?.unlimited || hasUnlimitedAdminAccess());
+    return {
+        limit,
+        used,
+        remaining: unlimited ? Number.POSITIVE_INFINITY : Math.max(0, limit - used),
+        unlimited
+    };
 }
 
 function blurActiveInput() {
@@ -4197,6 +4203,10 @@ function isPro() {
     return Boolean(state.boot?.subscription?.active);
 }
 
+function hasUnlimitedAdminAccess() {
+    return Boolean(state.boot?.isAdmin && isPro());
+}
+
 function canRunFaceAnalysis() {
     if (!hasFaceAnalysisEntitlement()) return false;
     return !isPro() || analysisCooldownRemaining("face") <= 0;
@@ -4226,6 +4236,7 @@ function featureCooldownRemaining(id) {
 }
 
 function analysisCooldownRemaining(id) {
+    if (hasUnlimitedAdminAccess()) return 0;
     if (id === "face" && isPro() && state.analysis?.accessLevel === "standalone") return 0;
     const timestamp = analysisTimestamp(id);
     if (!timestamp) return 0;

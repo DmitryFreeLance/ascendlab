@@ -2,6 +2,7 @@ package lab.ascend.web;
 
 import lab.ascend.config.AppProperties;
 import lab.ascend.domain.UserProfile;
+import lab.ascend.domain.SubscriptionStatus;
 import lab.ascend.repo.AnalysisRepository;
 import lab.ascend.repo.BattleProfileRepository;
 import lab.ascend.repo.UserRepository;
@@ -65,13 +66,16 @@ public class AppController {
     @GetMapping("/bootstrap")
     public Map<String, Object> bootstrap(@RequestHeader(value = "X-Telegram-Init-Data", required = false) String initData) {
         UserProfile user = currentUser.require(initData);
+        SubscriptionStatus subscription = subscriptions.status(user.telegramId());
+        boolean isAdmin = admins.isAdmin(user.telegramId());
+        boolean unlimitedAdminAccess = isAdmin && subscription.active();
         int battleCommunity = battleProfiles.countOpponents(user.telegramId());
         return Map.ofEntries(
                 Map.entry("user", user),
                 Map.entry("onboardingSeen", users.onboardingSeen(user.telegramId())),
-                Map.entry("isAdmin", admins.isAdmin(user.telegramId())),
-                Map.entry("subscription", subscriptions.status(user.telegramId())),
-                Map.entry("chatUsage", chatUsage.status(user.telegramId())),
+                Map.entry("isAdmin", isAdmin),
+                Map.entry("subscription", subscription),
+                Map.entry("chatUsage", chatUsage.status(user.telegramId(), unlimitedAdminAccess)),
                 Map.entry("hasFaceAnalysis", analyses.existsByTelegramId(user.telegramId())),
                 Map.entry("faceAnalysis", faceAccess.status(user.telegramId())),
                 Map.entry("communityProgress", analyses.communityProgress()),

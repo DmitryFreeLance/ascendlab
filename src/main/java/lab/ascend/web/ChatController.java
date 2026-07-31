@@ -3,6 +3,7 @@ package lab.ascend.web;
 import jakarta.validation.constraints.NotBlank;
 import lab.ascend.domain.UserProfile;
 import lab.ascend.service.AiService;
+import lab.ascend.service.AdminService;
 import lab.ascend.service.ChatUsageService;
 import lab.ascend.service.CurrentUserService;
 import lab.ascend.service.SubscriptionService;
@@ -23,15 +24,18 @@ import java.util.List;
 public class ChatController {
     private final CurrentUserService currentUser;
     private final SubscriptionService subscriptions;
+    private final AdminService admins;
     private final ChatUsageService chatUsage;
     private final AiService ai;
 
     public ChatController(CurrentUserService currentUser,
                           SubscriptionService subscriptions,
+                          AdminService admins,
                           ChatUsageService chatUsage,
                           AiService ai) {
         this.currentUser = currentUser;
         this.subscriptions = subscriptions;
+        this.admins = admins;
         this.chatUsage = chatUsage;
         this.ai = ai;
     }
@@ -41,8 +45,9 @@ public class ChatController {
                                                         @RequestBody ChatRequest request) {
         UserProfile user = currentUser.require(initData);
         boolean active = subscriptions.isActive(user.telegramId());
+        boolean unlimitedAdminAccess = active && admins.isAdmin(user.telegramId());
         if (active) {
-            chatUsage.reserve(user.telegramId());
+            chatUsage.reserve(user.telegramId(), unlimitedAdminAccess);
         }
         StreamingResponseBody body = output -> ai.streamChat(user, active, request.message(), request.history(), output);
         return ResponseEntity.ok()
