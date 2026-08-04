@@ -1172,6 +1172,7 @@ function faceReviewPhoto(kind, label) {
     const src = state.previews[kind];
     return `<div class="face-review-photo ${src ? "has-photo" : ""}">
         ${src ? `<img src="${src}" alt="">` : `<span>нет</span>`}
+        ${src ? removeUploadButton(kind, label) : ""}
         <small>${label}</small>
     </div>`;
 }
@@ -2272,15 +2273,28 @@ function uploadTile(kind, title, subtitle) {
     const hasImage = Boolean(file || preview);
     const toolId = kind.startsWith("tool-") ? kind.slice(5) : "";
     const icon = kind === "front" ? "camera" : kind === "body" ? "scan-line" : toolWorkspaces[toolId]?.icon || "scan";
-    return `<label class="upload-tile ${hasImage ? "has-file" : ""}">
+    return `<div class="upload-tile ${hasImage ? "has-file" : ""}">
         ${preview ? `<img class="upload-preview" src="${preview}" alt="">` : ""}
-        <input type="file" accept="image/png,image/jpeg" data-file="${kind}">
-        <span class="upload-content">
-            <span class="upload-icon"><i data-lucide="${icon}"></i></span>
-            <h3>${file ? escapeHtml(file.name) : preview ? "Фото загружено" : title}</h3>
-            <small class="muted">${subtitle}</small>
-        </span>
-    </label>`;
+        <label class="upload-picker">
+            <input type="file" accept="image/png,image/jpeg" data-file="${kind}">
+            <span class="upload-content">
+                <span class="upload-icon"><i data-lucide="${icon}"></i></span>
+                <h3>${file ? escapeHtml(file.name) : preview ? "Фото загружено" : title}</h3>
+                <small class="muted">${subtitle}</small>
+            </span>
+        </label>
+        ${hasImage && isFaceUpload(kind) ? removeUploadButton(kind, title) : ""}
+    </div>`;
+}
+
+function isFaceUpload(kind) {
+    return kind === "front" || kind === "side";
+}
+
+function removeUploadButton(kind, label) {
+    return `<button type="button" class="upload-remove" data-action="remove-upload" data-upload-kind="${kind}" aria-label="Убрать фото: ${escapeHtml(label)}" title="Убрать фото">
+        <i data-lucide="x"></i>
+    </button>`;
 }
 
 function viewForFeature(id) {
@@ -2405,6 +2419,12 @@ function bindView() {
 
 async function handleAction(event) {
     const action = event.currentTarget.dataset.action;
+    if (action === "remove-upload") {
+        event.preventDefault();
+        event.stopPropagation();
+        clearFaceUpload(event.currentTarget.dataset.uploadKind);
+        return;
+    }
     blurActiveInput();
     if (action === "skip-onboarding") {
         finishOnboarding();
@@ -3381,6 +3401,18 @@ function revokePreview(url) {
     if (url?.startsWith("blob:")) {
         URL.revokeObjectURL(url);
     }
+}
+
+function clearFaceUpload(kind) {
+    if (!isFaceUpload(kind)) return;
+    revokePreview(state.previews[kind]);
+    state.files[kind] = null;
+    state.previews[kind] = null;
+    localStorage.removeItem(storageKey(`preview-${kind}`));
+    if (kind === "front" && !state.analysis) {
+        state.analysisStep = 1;
+    }
+    render();
 }
 
 async function persistPreview(kind, file) {

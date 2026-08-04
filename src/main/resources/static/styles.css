@@ -1008,12 +1008,53 @@ h3 {
     overflow: hidden;
 }
 
+.upload-picker {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    cursor: pointer;
+}
+
 .upload-tile input {
     position: absolute;
     inset: 0;
     opacity: 0;
     cursor: pointer;
     z-index: 3;
+}
+
+.upload-remove {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 5;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    color: #fff;
+    background: rgba(7, 9, 14, 0.72);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+}
+
+.upload-remove:hover,
+.upload-remove:focus-visible {
+    border-color: rgba(255, 255, 255, 0.46);
+    background: rgba(7, 9, 14, 0.9);
+}
+
+.upload-remove svg {
+    width: 17px;
+    height: 17px;
+    pointer-events: none;
 }
 
 .upload-tile.has-file {
@@ -1124,6 +1165,7 @@ h3 {
 }
 
 .face-review-photo {
+    position: relative;
     display: grid;
     gap: 10px;
     justify-items: center;
@@ -5178,6 +5220,11 @@ h3 {
 .feature-card {
     min-height: 150px;
     padding: 18px 14px;
+}
+
+.face-review-photo .upload-remove {
+    top: 8px;
+    right: 8px;
 }
 
 .feature-card:nth-child(3n + 1) .icon-shell {
